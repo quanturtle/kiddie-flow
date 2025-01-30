@@ -58,6 +58,10 @@ export function Sidebar() {
     updateNodeConfig(selectedNode, { text });
   };
 
+  const handleDescriptionChange = (description: string) => {
+    updateNodeConfig(selectedNode, { description });
+  };
+
   return (
     <div className="fixed right-0 top-0 h-screen w-80 bg-white border-l-4 border-black p-6 overflow-y-auto shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
       <div className="flex justify-between items-center mb-6">
@@ -79,6 +83,17 @@ export function Sidebar() {
             onChange={(e) => handleTitleChange(e.target.value)}
             className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             placeholder="Enter node title..."
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="font-bold text-sm uppercase">Description</label>
+          <textarea
+            value={node.data.description}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            placeholder="Enter node description..."
+            rows={2}
           />
         </div>
 

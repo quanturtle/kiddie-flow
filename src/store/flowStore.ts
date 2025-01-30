@@ -23,6 +23,8 @@ type HandleConfig = {
 
 type NodeData = {
   title: string;
+  description: string;
+  showDescription: boolean;
   text: string;
   createdAt: string;
   onChange: (text: string) => void;
@@ -37,6 +39,7 @@ type NodeData = {
   audioUrl?: string;
   showInputs?: boolean;
   showOutput?: boolean;
+  isCollapsed?: boolean;
 };
 
 type RFState = {
@@ -139,6 +142,8 @@ export const useStore = create<RFState>((set, get) => ({
       position: { x: 250, y: 100 },
       data: {
         title: 'First Node',
+        description: 'A simple text transformation node',
+        showDescription: true,
         text: 'Node 1',
         createdAt: new Date().toISOString(),
         onChange: (text: string) => get().updateNodeData('1', text),
@@ -150,6 +155,7 @@ export const useStore = create<RFState>((set, get) => ({
         outputHandles: createDefaultHandles(1, 'output'),
         showInputs: false,
         showOutput: false,
+        isCollapsed: false,
       },
     },
   ],
@@ -367,12 +373,28 @@ export const useStore = create<RFState>((set, get) => ({
       y: lastNode.position.y + 50,
     };
 
+    const getDefaultDescription = (type: NodeType) => {
+      switch (type) {
+        case 'text': return 'Transforms text input using template syntax';
+        case 'image': return 'Processes image data';
+        case 'voice': return 'Handles voice and audio processing';
+        case 'javascript': return 'Executes JavaScript code';
+        case 'python': return 'Runs Python code';
+        case 'result': return 'Displays final output';
+        case 'source': return 'Provides initial input data';
+        case 'preview': return 'Shows live preview of changes';
+        default: return '';
+      }
+    };
+
     const newNode: Node<NodeData> = {
       id,
       type: 'flowNode',
       position,
       data: {
         title: `${type.charAt(0).toUpperCase() + type.slice(1)} ${id}`,
+        description: getDefaultDescription(type),
+        showDescription: true,
         text: type === 'result' || type === 'preview' ? '' : `${type} ${id}`,
         createdAt: new Date().toISOString(),
         onChange: (text: string) => get().updateNodeData(id, text),
@@ -384,6 +406,7 @@ export const useStore = create<RFState>((set, get) => ({
         outputHandles: createDefaultHandles(type === 'result' ? 0 : 1, 'output'),
         showInputs: false,
         showOutput: false,
+        isCollapsed: false,
         ...(type === 'source' && { sourceType: 'text' as SourceInputType }),
       },
     };
