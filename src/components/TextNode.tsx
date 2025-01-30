@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
 import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, ChevronDown, ChevronUp, Minus } from 'lucide-react';
 import { useStore, NodeType } from '../store/flowStore';
@@ -35,7 +35,8 @@ const typeColors = {
   preview: 'bg-amber-100 border-amber-300',
 };
 
-const ANIMATION_DURATION = 200; // Match this with CSS transition duration (0.2s = 200ms)
+const ANIMATION_DURATION = 200;
+const DEBOUNCE_DELAY = 2000; // 2 seconds delay for text updates
 
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
@@ -45,6 +46,8 @@ export function TextNode({ id, data }: NodeProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState(false);
   const transitionTimeoutRef = useRef<NodeJS.Timeout>();
+  const debouncedUpdateRef = useRef<NodeJS.Timeout>();
+  const [localText, setLocalText] = useState(data.text);
 
   // Track all elements that might trigger transitions
   const transitionElements = useRef<Set<HTMLElement>>(new Set());
@@ -58,14 +61,12 @@ export function TextNode({ id, data }: NodeProps) {
 
   const startTransition = () => {
     setIsAnimating(true);
-    // Clear any existing timeout
     if (transitionTimeoutRef.current) {
       clearTimeout(transitionTimeoutRef.current);
     }
   };
 
   const endTransition = () => {
-    // Set a timeout slightly longer than the animation duration to ensure all transitions complete
     transitionTimeoutRef.current = setTimeout(() => {
       setIsAnimating(false);
     }, ANIMATION_DURATION + 50);
@@ -91,7 +92,6 @@ export function TextNode({ id, data }: NodeProps) {
       }
     };
 
-    // Listen for transitions on the node and all its children
     node.addEventListener('transitionstart', handleTransitionStart);
     node.addEventListener('transitionend', handleTransitionEnd);
 
@@ -104,7 +104,6 @@ export function TextNode({ id, data }: NodeProps) {
     };
   }, []);
 
-  // Update node internals when relevant properties change
   useEffect(() => {
     if (isAnimating) {
       setPendingUpdate(true);
@@ -124,13 +123,37 @@ export function TextNode({ id, data }: NodeProps) {
     updateNodeInternals
   ]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  // Update localText when data.text changes from external sources
+  useEffect(() => {
+    setLocalText(data.text);
+  }, [data.text]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
-    data.onChange(newText);
-  };
+    setLocalText(newText);
+
+    // Clear any existing timeout
+    if (debouncedUpdateRef.current) {
+      clearTimeout(debouncedUpdateRef.current);
+    }
+
+    // Set new timeout for the update
+    debouncedUpdateRef.current = setTimeout(() => {
+      data.onChange(newText);
+    }, DEBOUNCE_DELAY);
+  }, [data]);
+
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debouncedUpdateRef.current) {
+        clearTimeout(debouncedUpdateRef.current);
+      }
+    };
+  }, []);
 
   const handlePlay = () => {
-    data.onChange(data.text);
+    data.onChange(localText);
   };
 
   const toggleInputs = () => {
@@ -163,7 +186,6 @@ export function TextNode({ id, data }: NodeProps) {
         inputs: data.inputs + 1,
         showInputs: true 
       });
-      // Immediately update node internals for the new handle
       updateNodeInternals(id);
     }
   };
@@ -171,7 +193,6 @@ export function TextNode({ id, data }: NodeProps) {
   const handleRemoveLastInput = () => {
     if (data.inputs > 1) {
       removeLastInput(id);
-      // Immediately update node internals for the removed handle
       updateNodeInternals(id);
     }
   };
@@ -333,7 +354,7 @@ export function TextNode({ id, data }: NodeProps) {
                 <div className="w-full">
                   <div className="text-xs font-bold mb-2 uppercase text-gray-600">Source Text</div>
                   <textarea
-                    value={data.text}
+                    value={localText}
                     onChange={handleChange}
                     className="w-full p-2 border-2 border-black rounded resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     rows={8}
@@ -425,7 +446,7 @@ export function TextNode({ id, data }: NodeProps) {
                       <div className="flex-1">
                         <div className="text-xs font-bold mb-2 uppercase text-gray-600">Transform</div>
                         <textarea
-                          value={data.text}
+                          value={localText}
                           onChange={handleChange}
                           className="w-full p-2 border-2 border-black rounded resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                           rows={8}
