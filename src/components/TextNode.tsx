@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
-import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, ChevronDown, ChevronUp, Minus } from 'lucide-react';
 import { useStore, NodeType } from '../store/flowStore';
 
 interface NodeProps {
@@ -35,13 +35,94 @@ const typeColors = {
   preview: 'bg-amber-100 border-amber-300',
 };
 
+const ANIMATION_DURATION = 200; // Match this with CSS transition duration (0.2s = 200ms)
+
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
   const updateNodeConfig = useStore(state => state.updateNodeConfig);
+  const removeLastInput = useStore(state => state.removeLastInput);
+  const nodeRef = useRef<HTMLDivElement>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState(false);
+  const transitionTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Track all elements that might trigger transitions
+  const transitionElements = useRef<Set<HTMLElement>>(new Set());
 
   useEffect(() => {
-    updateNodeInternals(id);
-  }, [id, data.inputs, data.outputs, data.inputHandles.length, data.outputHandles.length, updateNodeInternals]);
+    if (pendingUpdate && !isAnimating) {
+      updateNodeInternals(id);
+      setPendingUpdate(false);
+    }
+  }, [id, pendingUpdate, isAnimating, updateNodeInternals]);
+
+  const startTransition = () => {
+    setIsAnimating(true);
+    // Clear any existing timeout
+    if (transitionTimeoutRef.current) {
+      clearTimeout(transitionTimeoutRef.current);
+    }
+  };
+
+  const endTransition = () => {
+    // Set a timeout slightly longer than the animation duration to ensure all transitions complete
+    transitionTimeoutRef.current = setTimeout(() => {
+      setIsAnimating(false);
+    }, ANIMATION_DURATION + 50);
+  };
+
+  useEffect(() => {
+    const node = nodeRef.current;
+    if (!node) return;
+
+    const handleTransitionStart = (e: TransitionEvent) => {
+      if (e.target instanceof HTMLElement) {
+        transitionElements.current.add(e.target);
+        startTransition();
+      }
+    };
+
+    const handleTransitionEnd = (e: TransitionEvent) => {
+      if (e.target instanceof HTMLElement) {
+        transitionElements.current.delete(e.target);
+        if (transitionElements.current.size === 0) {
+          endTransition();
+        }
+      }
+    };
+
+    // Listen for transitions on the node and all its children
+    node.addEventListener('transitionstart', handleTransitionStart);
+    node.addEventListener('transitionend', handleTransitionEnd);
+
+    return () => {
+      node.removeEventListener('transitionstart', handleTransitionStart);
+      node.removeEventListener('transitionend', handleTransitionEnd);
+      if (transitionTimeoutRef.current) {
+        clearTimeout(transitionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Update node internals when relevant properties change
+  useEffect(() => {
+    if (isAnimating) {
+      setPendingUpdate(true);
+    } else {
+      updateNodeInternals(id);
+    }
+  }, [
+    id,
+    data.inputs,
+    data.outputs,
+    data.inputHandles.length,
+    data.outputHandles.length,
+    data.isCollapsed,
+    data.showInputs,
+    data.showOutput,
+    isAnimating,
+    updateNodeInternals
+  ]);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
@@ -53,14 +134,17 @@ export function TextNode({ id, data }: NodeProps) {
   };
 
   const toggleInputs = () => {
+    startTransition();
     updateNodeConfig(id, { showInputs: !data.showInputs });
   };
 
   const toggleOutput = () => {
+    startTransition();
     updateNodeConfig(id, { showOutput: !data.showOutput });
   };
 
   const toggleCollapse = () => {
+    startTransition();
     updateNodeConfig(id, { 
       isCollapsed: !data.isCollapsed,
       showInputs: false,
@@ -69,6 +153,7 @@ export function TextNode({ id, data }: NodeProps) {
   };
 
   const toggleDescription = () => {
+    startTransition();
     updateNodeConfig(id, { showDescription: !data.showDescription });
   };
 
@@ -78,22 +163,53 @@ export function TextNode({ id, data }: NodeProps) {
         inputs: data.inputs + 1,
         showInputs: true 
       });
+      // Immediately update node internals for the new handle
+      updateNodeInternals(id);
     }
   };
 
-  const calculateHandlePositions = (count: number) => {
-    const positions: number[] = [];
-    const step = 100 / (count + 1);
-    for (let i = 1; i <= count; i++) {
-      positions.push(step * i);
+  const handleRemoveLastInput = () => {
+    if (data.inputs > 1) {
+      removeLastInput(id);
+      // Immediately update node internals for the removed handle
+      updateNodeInternals(id);
     }
-    return positions;
   };
 
-  const inputPositions = calculateHandlePositions(data.inputHandles.length);
-  const outputPositions = calculateHandlePositions(data.outputHandles.length);
+  const calculateHandlePositions = (count: number, isCollapsed: boolean) => {
+    if (isCollapsed) {
+      // When collapsed, distribute handles using 90% of the node height
+      const positions: number[] = [];
+      const start = 5; // Start at 5% from top
+      const end = 95; // End at 95% from top
+      const step = (end - start) / (count + 1);
+      
+      for (let i = 1; i <= count; i++) {
+        positions.push(start + (step * i));
+      }
+      return positions;
+    } else {
+      // When expanded, distribute handles along the full height
+      const positions: number[] = [];
+      const step = 100 / (count + 1);
+      for (let i = 1; i <= count; i++) {
+        positions.push(step * i);
+      }
+      return positions;
+    }
+  };
 
-  const processedText = React.useMemo(() => {
+  const inputPositions = useMemo(
+    () => calculateHandlePositions(data.inputHandles.length, data.isCollapsed),
+    [data.inputHandles.length, data.isCollapsed]
+  );
+
+  const outputPositions = useMemo(
+    () => calculateHandlePositions(data.outputHandles.length, data.isCollapsed),
+    [data.outputHandles.length, data.isCollapsed]
+  );
+
+  const processedText = useMemo(() => {
     let result = data.text;
     data.inputHandles.forEach(handle => {
       const value = data.inputValues[handle.id];
@@ -107,11 +223,25 @@ export function TextNode({ id, data }: NodeProps) {
 
   return (
     <div 
-      className={`rounded-lg border-4 relative shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${typeColors[data.type]} ${data.isCollapsed ? 'p-2' : 'p-4'}`}
-      style={{ transform: 'translate(-50%, -50%)' }}
+      ref={nodeRef}
+      className={`rounded-lg border-4 relative shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${typeColors[data.type]}`}
+      style={{ 
+        transform: 'translate(-50%, -50%)',
+        padding: data.isCollapsed ? '8px' : '16px',
+        minHeight: data.isCollapsed ? '48px' : 'auto',
+        width: '100%',
+        transition: `all ${ANIMATION_DURATION}ms ease-in-out`,
+      }}
     >
       <div className="flex gap-6 relative">
-        <div className="absolute left-0 h-full" style={{ width: '20px', transform: 'translateX(-32px)' }}>
+        <div 
+          className="absolute left-0 h-full flex flex-col justify-center" 
+          style={{ 
+            width: '20px', 
+            transform: 'translateX(-32px)',
+            transition: `height ${ANIMATION_DURATION}ms ease-in-out`
+          }}
+        >
           {data.inputHandles.map((handle, i) => (
             <Handle
               key={handle.id}
@@ -119,12 +249,14 @@ export function TextNode({ id, data }: NodeProps) {
               type="target"
               position={Position.Left}
               className="w-3 h-3 !bg-black"
-              style={{ top: data.isCollapsed ? '50%' : `${inputPositions[i]}%` }}
+              style={{ 
+                top: `${inputPositions[i]}%`
+              }}
             />
           ))}
         </div>
 
-        <div className="w-full min-w-[300px]">
+        <div className="w-full min-w-[300px]" style={{ transition: `width ${ANIMATION_DURATION}ms ease-in-out` }}>
           <div className={`flex flex-col gap-1 ${!data.isCollapsed && 'mb-4'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -224,6 +356,14 @@ export function TextNode({ id, data }: NodeProps) {
                               <Plus className="w-3 h-3" />
                             </button>
                             <button
+                              onClick={handleRemoveLastInput}
+                              className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                              title="Remove last input"
+                              disabled={data.inputs <= 1}
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <button
                               onClick={toggleInputs}
                               className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                               title="Show inputs"
@@ -244,6 +384,14 @@ export function TextNode({ id, data }: NodeProps) {
                                 disabled={data.inputs >= 5}
                               >
                                 <Plus className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={handleRemoveLastInput}
+                                className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                title="Remove last input"
+                                disabled={data.inputs <= 1}
+                              >
+                                <Minus className="w-3 h-3" />
                               </button>
                               <button
                                 onClick={toggleInputs}
@@ -324,7 +472,14 @@ export function TextNode({ id, data }: NodeProps) {
           )}
         </div>
 
-        <div className="absolute right-0 h-full" style={{ width: '20px', transform: 'translateX(32px)' }}>
+        <div 
+          className="absolute right-0 h-full flex flex-col justify-center" 
+          style={{ 
+            width: '20px', 
+            transform: 'translateX(32px)',
+            transition: `height ${ANIMATION_DURATION}ms ease-in-out`
+          }}
+        >
           {data.outputHandles.map((handle, i) => (
             <Handle
               key={handle.id}
@@ -332,7 +487,9 @@ export function TextNode({ id, data }: NodeProps) {
               type="source"
               position={Position.Right}
               className="w-3 h-3 !bg-black"
-              style={{ top: data.isCollapsed ? '50%' : `${outputPositions[i]}%` }}
+              style={{ 
+                top: `${outputPositions[i]}%`
+              }}
             />
           ))}
         </div>
