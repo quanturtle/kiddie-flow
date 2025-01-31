@@ -1,6 +1,9 @@
-# Kiddie Flow
+# Kiddie Flow (PoC)
+Simple workflow tool with neobrutalist inspired design using Reactflow.
 
-A PoC for a simple workflow tool for quick prototyping.
+[Demo here](https://benevolent-biscotti-ec1fce.netlify.app).
+
+
 
 ## Install
 Run with `docker`:
