@@ -181,6 +181,16 @@ const resolveDrops = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): 
   return drops;
 };
 
+export const pushOverlaps = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): Node<NodeData>[] => {
+  // drop the nodes and edges the pivot's current box now overlaps, only as far as needed, without
+  // moving the pivot itself — used both by expansion and when a node reshapes on its own
+  const drops = resolveDrops(nodes, edges, pivotId);
+  return nodes.map(n => {
+    const drop = drops.get(n.id);
+    return drop ? { ...n, position: { x: n.position.x, y: n.position.y + drop } } : n;
+  });
+};
+
 export const applyExpansion = (
   nodes: Node<NodeData>[],
   edges: Edge[],
@@ -193,11 +203,7 @@ export const applyExpansion = (
   if (dH <= 0) return widened;
 
   // grow-down: drop the nodes and edges the taller box now overlaps, only as far as needed
-  const drops = resolveDrops(widened, edges, pivotId);
-  return widened.map(n => {
-    const drop = drops.get(n.id);
-    return drop ? { ...n, position: { x: n.position.x, y: n.position.y + drop } } : n;
-  });
+  return pushOverlaps(widened, edges, pivotId);
 };
 
 const visitAncestors = (

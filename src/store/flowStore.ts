@@ -10,7 +10,7 @@ import {
 import { create } from 'zustand';
 import { NodeData, NodeType, RFState } from './types';
 import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
-import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, applyExpansion, collectDownstream, reconcileImageNodes } from './nodeOperations';
+import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, applyExpansion, pushOverlaps, collectDownstream, reconcileImageNodes } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
 import { runPython } from '../runtime/pythonRuntime';
 
@@ -26,7 +26,8 @@ export const useStore = create<RFState>((set, get) => {
     preExpandLayout: {},
 
     onNodesChange: (changes: NodeChange[]) => {
-      const updated = applyNodeChanges(changes, get().nodes);
+      const previous = get().nodes;
+      const updated = applyNodeChanges(changes, previous);
       const pending = get().pendingExpand;
 
       // while a node expands, rebuild the layout from the pre-expand snapshot so growth is
@@ -46,6 +47,27 @@ export const useStore = create<RFState>((set, get) => {
           return;
         }
       }
+
+      // a node grew on its own — e.g. running a node reshaped it or one of its downstream nodes —
+      // so push whatever the new shape now overlaps, the same way an expand does
+      const grownIds = changes.reduce<string[]>((ids, change) => {
+        if (change.type !== 'dimensions') return ids;
+        const before = previous.find(n => n.id === change.id);
+        const after = updated.find(n => n.id === change.id);
+        if (before?.height != null && after?.height != null && after.height > before.height + 1) {
+          ids.push(change.id);
+        }
+        return ids;
+      }, []);
+      if (grownIds.length > 0) {
+        let laid = updated;
+        grownIds.forEach(id => {
+          laid = pushOverlaps(laid, get().edges, id);
+        });
+        set({ nodes: laid });
+        return;
+      }
+
       set({ nodes: updated });
     },
 
