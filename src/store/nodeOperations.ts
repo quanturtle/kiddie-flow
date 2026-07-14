@@ -43,13 +43,26 @@ export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], so
   return updatedNodes;
 };
 
-export const shiftDownstream = (nodes: Node<NodeData>[], pivotId: string, dx: number): Node<NodeData>[] => {
-  // move every node to the right of the pivot by dx (used to open/close room on expand/collapse)
-  const pivot = nodes.find(n => n.id === pivotId);
-  if (!pivot) return nodes;
-  const pivotX = pivot.position.x;
+const collectDownstream = (edges: Edge[], nodeId: string, acc: Set<string>): void => {
+  // walk every edge out of nodeId so the whole downstream chain lands in acc
+  edges
+    .filter(edge => edge.source === nodeId)
+    .forEach(edge => {
+      if (edge.target && !acc.has(edge.target)) {
+        acc.add(edge.target);
+        collectDownstream(edges, edge.target, acc);
+      }
+    });
+};
+
+export const shiftDownstream = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string, dx: number): Node<NodeData>[] => {
+  // open/close room on expand/collapse by sliding only the pivot's own downstream chain: the
+  // pivot and everything after it in its pipeline travel together, so their edges keep their
+  // length and no node in a parallel pipeline is disturbed.
+  const downstream = new Set<string>();
+  collectDownstream(edges, pivotId, downstream);
   return nodes.map(n =>
-    n.id !== pivotId && n.position.x > pivotX
+    downstream.has(n.id)
       ? { ...n, position: { x: n.position.x + dx, y: n.position.y } }
       : n
   );

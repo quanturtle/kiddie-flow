@@ -38,7 +38,7 @@ export const useStore = create<RFState>((set, get) => {
         const diff = desired - applied;
         if (diff !== 0) {
           set({
-            nodes: shiftDownstream(updated, pending.id, diff),
+            nodes: shiftDownstream(updated, get().edges, pending.id, diff),
             expandShifts: { ...get().expandShifts, [pending.id]: desired },
           });
           return;
@@ -235,7 +235,7 @@ export const useStore = create<RFState>((set, get) => {
         // slide the right-hand nodes back to where they were before this node expanded
         const shift = get().expandShifts[nodeId];
         if (shift) {
-          nodes = shiftDownstream(nodes, nodeId, -shift);
+          nodes = shiftDownstream(nodes, get().edges, nodeId, -shift);
           const rest = { ...get().expandShifts };
           delete rest[nodeId];
           set({ nodes, expandShifts: rest, pendingExpand: null });
