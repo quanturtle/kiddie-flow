@@ -134,10 +134,14 @@ export const applyExpansion = (
   const widened = shiftDownstream(nodes, edges, pivotId, dW);
   if (dH <= 0) return widened;
 
-  // grow-down: drop the nodes the taller pivot now overlaps (and their column) by the same dH
+  // grow-down: drop the nodes the taller pivot now overlaps (and their column) by the same dH,
+  // dragging each displaced node's downstream chain along so its outgoing edges stay level
   const pushDown = collectBelowOverlap(widened, pivotId, dH);
+  const dragged = new Set(pushDown);
+  pushDown.forEach(id => collectDownstream(edges, id, dragged));
+  dragged.delete(pivotId);
   return widened.map(n =>
-    pushDown.has(n.id)
+    dragged.has(n.id)
       ? { ...n, position: { x: n.position.x, y: n.position.y + dH } }
       : n
   );
