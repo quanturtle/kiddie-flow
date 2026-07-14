@@ -27,7 +27,7 @@ export function AddNodeMenu() {
       {isOpen && (
         <div className="absolute top-full left-0 mt-2 bg-white border-2 border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden min-w-[160px]">
           {menuOrder.map((type, i) => {
-            const { icon: Icon, bg } = nodeStyles[type];
+            const { icon: Icon, bg, dark } = nodeStyles[type];
             return (
               <button
                 key={type}
@@ -37,7 +37,7 @@ export function AddNodeMenu() {
                 }`}
               >
                 <span className={`w-6 h-6 flex items-center justify-center border-2 border-black rounded-md ${bg}`}>
-                  <Icon className="w-3.5 h-3.5 text-black" />
+                  <Icon className={`w-3.5 h-3.5 ${dark ? 'text-white' : 'text-black'}`} />
                 </span>
                 <span className="capitalize">{type}</span>
               </button>
