@@ -29,6 +29,8 @@ interface NodeProps {
 const ANIMATION_DURATION = 200;
 const DEBOUNCE_DELAY = 2000; // 2 seconds delay for text updates
 
+const isImageValue = (value?: string): boolean => !!value && value.startsWith('data:image');
+
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
   const updateNodeConfig = useStore(state => state.updateNodeConfig);
@@ -327,6 +329,10 @@ export function TextNode({ id, data }: NodeProps) {
               </code>
             )}
 
+            {data.type === 'image' && data.isCollapsed && isImageValue(data.text) && (
+              <img src={data.text} alt="image" className="w-40 rounded-md border-2 border-black" />
+            )}
+
             {data.type === 'python' && data.isCollapsed && (data.isRunning || data.computedOutput || data.runError) && (
               <>
                 {data.isRunning ? (
@@ -340,6 +346,12 @@ export function TextNode({ id, data }: NodeProps) {
                   >
                     {data.runError}
                   </pre>
+                ) : isImageValue(data.computedOutput) ? (
+                  <img
+                    src={data.computedOutput}
+                    alt="output"
+                    className="w-full rounded-md border-2 border-black"
+                  />
                 ) : (
                   <pre
                     className="font-mono text-xs bg-gray-900 text-lime-300 border-2 border-black rounded-md px-2 py-1 whitespace-pre-wrap overflow-auto"
@@ -354,38 +366,79 @@ export function TextNode({ id, data }: NodeProps) {
 
           {!data.isCollapsed && (
             <>
-              {data.type === 'preview' ? (
+              {data.type === 'image' ? (
+                <div className="w-full">
+                  <div className="text-xs font-bold mb-2 uppercase text-gray-600">Image</div>
+                  {isImageValue(data.text) ? (
+                    <img
+                      src={data.text}
+                      alt="image"
+                      className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-500 p-3 border-2 border-dashed border-gray-400 rounded-lg text-center">
+                      No image loaded
+                    </div>
+                  )}
+                </div>
+              ) : data.type === 'preview' ? (
                 <div className="w-full">
                   <div className="text-xs font-bold mb-2 uppercase text-gray-600">Preview</div>
-                  <textarea
-                    value={data.text}
-                    readOnly
-                    className="w-full p-2 border-2 border-black rounded-lg bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
-                    rows={8}
-                    placeholder="Connected input will appear here..."
-                  />
+                  {isImageValue(data.text) ? (
+                    <img
+                      src={data.text}
+                      alt="preview"
+                      className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    />
+                  ) : (
+                    <textarea
+                      value={data.text}
+                      readOnly
+                      className="w-full p-2 border-2 border-black rounded-lg bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
+                      rows={8}
+                      placeholder="Connected input will appear here..."
+                    />
+                  )}
                 </div>
               ) : data.type === 'result' ? (
                 <div className="w-full">
                   <div className="text-xs font-bold mb-2 uppercase text-gray-400">Result</div>
-                  <textarea
-                    value={data.text}
-                    readOnly
-                    className="w-full p-2 border-2 border-gray-700 rounded-lg bg-gray-900 text-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
-                    rows={8}
-                    placeholder="Connected input will appear here..."
-                  />
+                  {isImageValue(data.text) ? (
+                    <img
+                      src={data.text}
+                      alt="result"
+                      className="w-full rounded-lg border-2 border-gray-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    />
+                  ) : (
+                    <textarea
+                      value={data.text}
+                      readOnly
+                      className="w-full p-2 border-2 border-gray-700 rounded-lg bg-gray-900 text-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
+                      rows={8}
+                      placeholder="Connected input will appear here..."
+                    />
+                  )}
                 </div>
               ) : data.type === 'source' ? (
                 <div className="w-full">
-                  <div className="text-xs font-bold mb-2 uppercase text-gray-600">Source Text</div>
-                  <textarea
-                    value={localText}
-                    onChange={handleChange}
-                    className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                    rows={8}
-                    placeholder="Enter your source text here..."
-                  />
+                  <div className="text-xs font-bold mb-2 uppercase text-gray-600">
+                    {isImageValue(localText) ? 'Source Image' : 'Source Text'}
+                  </div>
+                  {isImageValue(localText) ? (
+                    <img
+                      src={localText}
+                      alt="source"
+                      className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    />
+                  ) : (
+                    <textarea
+                      value={localText}
+                      onChange={handleChange}
+                      className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      rows={8}
+                      placeholder="Enter your source text here..."
+                    />
+                  )}
                 </div>
               ) : (
                 <>
@@ -560,6 +613,12 @@ export function TextNode({ id, data }: NodeProps) {
                         </span>
                         {data.runError}
                       </pre>
+                    ) : isImageValue(data.computedOutput) ? (
+                      <img
+                        src={data.computedOutput}
+                        alt="output"
+                        className="max-w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      />
                     ) : (
                       <pre
                         className="w-full p-2 border-2 border-black rounded-lg bg-gray-900 text-lime-300 text-xs font-mono whitespace-pre-wrap overflow-auto shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"

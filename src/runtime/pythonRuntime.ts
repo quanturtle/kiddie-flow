@@ -19,6 +19,7 @@ type Pyodide = {
   toPy: (value: unknown) => PyNamespace;
   setStdout: (options: { batched: (text: string) => void }) => void;
   setStderr: (options: { batched: (text: string) => void }) => void;
+  loadPackagesFromImports: (code: string) => Promise<unknown>;
 };
 
 // user code defines a function named after the node; call it with the node's inputs.
@@ -90,10 +91,14 @@ export const runPython = async (
   pyodide.setStdout({ batched: (text: string) => lines.push(text) });
   pyodide.setStderr({ batched: (text: string) => lines.push(text) });
 
+  // pull in any bundled packages the code imports (e.g. Pillow for image work)
+  const fullCode = RUNTIME_PRELUDE + code + '\n' + CALL_EPILOGUE;
+  await pyodide.loadPackagesFromImports(code);
+
   // run in a fresh namespace so nodes never leak state into one another
   const namespace = pyodide.toPy({ __kf_args: args, __kf_name: functionName });
   try {
-    pyodide.runPython(RUNTIME_PRELUDE + code + '\n' + CALL_EPILOGUE, { globals: namespace });
+    pyodide.runPython(fullCode, { globals: namespace });
     const returned = String(namespace.get('__kf_output') ?? '');
     const printed = lines.join('\n');
     return { ok: true, output: returned || printed };

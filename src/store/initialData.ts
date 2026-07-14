@@ -1,6 +1,29 @@
 import { Node, Edge } from 'reactflow';
 import { NodeData } from './types';
 import { createDefaultHandles } from './nodeUtils';
+import { CAT_IMAGE } from './catImage';
+
+const grayscaleCode = `from PIL import Image
+import base64, io
+
+
+def grayscale(image: str) -> str:
+    raw = base64.b64decode(image.split(",", 1)[1])
+    out = Image.open(io.BytesIO(raw)).convert("L")
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()`;
+
+const blurCode = `from PIL import Image, ImageFilter
+import base64, io
+
+
+def blur(image: str) -> str:
+    raw = base64.b64decode(image.split(",", 1)[1])
+    out = Image.open(io.BytesIO(raw)).filter(ImageFilter.GaussianBlur(4))
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()`;
 
 const sortDedupeCode = `def sort_dedupe(numbers: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(sorted(set(numbers)))`;
@@ -145,6 +168,72 @@ export const initialNodes: Node<NodeData>[] = [
       isCollapsed: false,
     },
   },
+  {
+    id: '6',
+    type: 'flowNode',
+    position: { x: 0, y: 760 },
+    data: {
+      title: 'cat',
+      description: 'Loads and previews cat_example.jpg',
+      showDescription: false,
+      text: CAT_IMAGE,
+      createdAt: new Date().toISOString(),
+      onChange: () => {},
+      type: 'image',
+      inputs: 0,
+      outputs: 1,
+      inputValues: {},
+      inputHandles: [],
+      outputHandles: createDefaultHandles(1, 'output'),
+      showInputs: false,
+      showOutput: false,
+      isCollapsed: false,
+    },
+  },
+  {
+    id: '7',
+    type: 'flowNode',
+    position: { x: 760, y: 600 },
+    data: {
+      title: 'grayscale',
+      description: 'Converts the image to grayscale with PIL',
+      showDescription: false,
+      text: grayscaleCode,
+      createdAt: new Date().toISOString(),
+      onChange: () => {},
+      type: 'python',
+      inputs: 1,
+      outputs: 1,
+      inputValues: {},
+      inputHandles: createDefaultHandles(1, 'input'),
+      outputHandles: createDefaultHandles(1, 'output'),
+      showInputs: false,
+      showOutput: false,
+      isCollapsed: true,
+    },
+  },
+  {
+    id: '8',
+    type: 'flowNode',
+    position: { x: 760, y: 960 },
+    data: {
+      title: 'blur',
+      description: 'Applies a Gaussian blur with PIL',
+      showDescription: false,
+      text: blurCode,
+      createdAt: new Date().toISOString(),
+      onChange: () => {},
+      type: 'python',
+      inputs: 1,
+      outputs: 1,
+      inputValues: {},
+      inputHandles: createDefaultHandles(1, 'input'),
+      outputHandles: createDefaultHandles(1, 'output'),
+      showInputs: false,
+      showOutput: false,
+      isCollapsed: true,
+    },
+  },
 ];
 
 export const initialEdges: Edge[] = [
@@ -173,6 +262,20 @@ export const initialEdges: Edge[] = [
     id: 'e4-5',
     source: '4',
     target: '5',
+    sourceHandle: 'output1',
+    targetHandle: 'input1',
+  },
+  {
+    id: 'e6-7',
+    source: '6',
+    target: '7',
+    sourceHandle: 'output1',
+    targetHandle: 'input1',
+  },
+  {
+    id: 'e6-8',
+    source: '6',
+    target: '8',
     sourceHandle: 'output1',
     targetHandle: 'input1',
   },

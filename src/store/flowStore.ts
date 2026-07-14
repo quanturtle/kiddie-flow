@@ -491,10 +491,12 @@ export const useStore = create<RFState>((set, get) => {
     },
   }));
 
-  // Trigger initial data flow after setup
+  // Trigger initial data flow after setup: source and image nodes seed their downstream
   setTimeout(() => {
-    const sourceNodes = store.nodes.filter(node => node.data.type === 'source');
-    sourceNodes.forEach(node => {
+    const rootNodes = store.nodes.filter(
+      node => node.data.type === 'source' || node.data.type === 'image'
+    );
+    rootNodes.forEach(node => {
       store.updateNodeData(node.id, node.data.text);
     });
   }, 0);
