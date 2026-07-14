@@ -228,7 +228,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '9',
     type: 'flowNode',
-    position: { x: 1520, y: 600 },
+    position: { x: 1700, y: 600 },
     data: {
       title: 'grayscale result',
       description: 'Displays the grayscale image',
@@ -250,7 +250,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '10',
     type: 'flowNode',
-    position: { x: 1520, y: 960 },
+    position: { x: 1700, y: 960 },
     data: {
       title: 'blur result',
       description: 'Displays the blurred image',
