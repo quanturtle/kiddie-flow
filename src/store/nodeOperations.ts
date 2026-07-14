@@ -70,47 +70,113 @@ export const shiftDownstream = (nodes: Node<NodeData>[], edges: Edge[], pivotId:
 
 const DEFAULT_NODE_WIDTH = 300;
 const DEFAULT_NODE_HEIGHT = 150;
+const PUSH_GAP = 32; // breathing room kept below the expanded node
 
-const horizontallyOverlap = (a: Node<NodeData>, b: Node<NodeData>): boolean => {
-  const aWidth = a.width ?? DEFAULT_NODE_WIDTH;
-  const bWidth = b.width ?? DEFAULT_NODE_WIDTH;
-  return a.position.x < b.position.x + bWidth && b.position.x < a.position.x + aWidth;
+type LayoutBox = { left: number; right: number; top: number; bottom: number };
+
+const boxOf = (node: Node<NodeData>, drop: number): LayoutBox => ({
+  left: node.position.x,
+  right: node.position.x + (node.width ?? DEFAULT_NODE_WIDTH),
+  top: node.position.y + drop,
+  bottom: node.position.y + drop + (node.height ?? DEFAULT_NODE_HEIGHT),
+});
+
+const boxesOverlap = (a: LayoutBox, b: LayoutBox): boolean =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+const handleY = (node: Node<NodeData>, drop: number): number =>
+  node.position.y + drop + (node.height ?? DEFAULT_NODE_HEIGHT) / 2;
+
+const segmentHitsBox = (ax: number, ay: number, bx: number, by: number, box: LayoutBox): boolean => {
+  // Liang–Barsky: true when any part of segment a→b lies inside the box
+  const dx = bx - ax;
+  const dy = by - ay;
+  const p = [-dx, dx, -dy, dy];
+  const q = [ax - box.left, box.right - ax, ay - box.top, box.bottom - ay];
+  let enter = 0;
+  let exit = 1;
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) {
+      if (q[i] < 0) return false;
+    } else {
+      const t = q[i] / p[i];
+      if (p[i] < 0) enter = Math.max(enter, t);
+      else exit = Math.min(exit, t);
+    }
+  }
+  return enter <= exit;
 };
 
-const PUSH_GAP = 32; // breathing room left below the expanded node
+const bumpDrop = (drops: Map<string, number>, id: string, value: number): boolean => {
+  if (value > (drops.get(id) ?? 0)) {
+    drops.set(id, value);
+    return true;
+  }
+  return false;
+};
 
-const nodeBottom = (node: Node<NodeData>, dy: number): number =>
-  node.position.y + dy + (node.height ?? DEFAULT_NODE_HEIGHT);
+const dropWithChildren = (drops: Map<string, number>, edges: Edge[], pivotId: string, id: string, value: number): boolean => {
+  // a displaced node drags its downstream chain by the same amount so its outgoing edges stay level
+  let changed = bumpDrop(drops, id, value);
+  const chain = new Set<string>();
+  collectDownstream(edges, id, chain);
+  chain.forEach(childId => {
+    if (childId !== pivotId && bumpDrop(drops, childId, value)) changed = true;
+  });
+  return changed;
+};
 
-const resolvePushDown = (nodes: Node<NodeData>[], pivotId: string): Map<string, number> => {
-  // give each node in the pivot's downward path the minimum drop that clears the box above it:
-  // just past the taller pivot (or an already-displaced node), plus a small gap — no more.
+const resolveDrops = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): Map<string, number> => {
+  // decide how far each node must drop so the expanded pivot overlaps neither a node nor an edge;
+  // drops only ever grow, so iterating to a fixed point settles in a few passes.
   const pivot = nodes.find(n => n.id === pivotId);
   const drops = new Map<string, number>();
   if (!pivot) return drops;
+  const pivotBox = boxOf(pivot, 0);
 
-  // sweep top-to-bottom so a node sees the resolved positions of the movers above it
-  const ordered = [...nodes]
-    .filter(n => n.id !== pivotId)
-    .sort((a, b) => a.position.y - b.position.y);
+  let changed = true;
+  let guard = 0;
+  while (changed && guard < 16) {
+    changed = false;
+    guard++;
 
-  for (const node of ordered) {
-    const top = node.position.y;
-    let drop = 0;
+    // a node the growing (or an already-displaced) box now covers slides down just far enough to clear it
+    for (const node of nodes) {
+      if (node.id === pivotId) continue;
+      const drop = drops.get(node.id) ?? 0;
+      const box = boxOf(node, drop);
+      let target = drop;
 
-    if (horizontallyOverlap(pivot, node) && top > pivot.position.y && top < nodeBottom(pivot, 0)) {
-      drop = Math.max(drop, nodeBottom(pivot, 0) + PUSH_GAP - top);
+      if (node.position.y > pivot.position.y && boxesOverlap(pivotBox, box)) {
+        target = Math.max(target, pivotBox.bottom + PUSH_GAP - node.position.y);
+      }
+      for (const [moverId, moverDrop] of drops) {
+        if (moverId === node.id) continue;
+        const mover = nodes.find(n => n.id === moverId);
+        if (!mover) continue;
+        const moverBox = boxOf(mover, moverDrop);
+        if (box.top > moverBox.top && boxesOverlap(moverBox, box)) {
+          target = Math.max(target, moverBox.bottom + PUSH_GAP - node.position.y);
+        }
+      }
+      if (dropWithChildren(drops, edges, pivotId, node.id, target)) changed = true;
     }
 
-    for (const [id, dy] of drops) {
-      const mover = nodes.find(n => n.id === id);
-      if (!mover) continue;
-      if (horizontallyOverlap(mover, node) && top > mover.position.y && top < nodeBottom(mover, dy)) {
-        drop = Math.max(drop, nodeBottom(mover, dy) + PUSH_GAP - top);
+    // an edge the growing box now crosses drops its target chain until the edge routes clear
+    for (const edge of edges) {
+      if (edge.source === pivotId || edge.target === pivotId) continue;
+      const source = nodes.find(n => n.id === edge.source);
+      const targetNode = nodes.find(n => n.id === edge.target);
+      if (!source || !targetNode || targetNode.position.y < pivot.position.y) continue;
+      const ax = source.position.x + (source.width ?? DEFAULT_NODE_WIDTH);
+      const ay = handleY(source, drops.get(source.id) ?? 0);
+      const bx = targetNode.position.x;
+      const by = handleY(targetNode, drops.get(targetNode.id) ?? 0);
+      if (segmentHitsBox(ax, ay, bx, by, pivotBox)) {
+        const cleared = (drops.get(targetNode.id) ?? 0) + (pivotBox.bottom + PUSH_GAP - by);
+        if (dropWithChildren(drops, edges, pivotId, targetNode.id, cleared)) changed = true;
       }
     }
-
-    if (drop > 0) drops.set(node.id, drop);
   }
   return drops;
 };
@@ -126,23 +192,12 @@ export const applyExpansion = (
   const widened = shiftDownstream(nodes, edges, pivotId, dW);
   if (dH <= 0) return widened;
 
-  // grow-down: drop only as far as needed to clear the taller box, dragging each displaced node's
-  // downstream chain along by the same amount so its outgoing edges stay level
-  const drops = resolvePushDown(widened, pivotId);
-  const withChildren = new Map(drops);
-  drops.forEach((dy, id) => {
-    const chain = new Set<string>();
-    collectDownstream(edges, id, chain);
-    chain.forEach(childId => {
-      if (childId !== pivotId) withChildren.set(childId, Math.max(withChildren.get(childId) ?? 0, dy));
-    });
+  // grow-down: drop the nodes and edges the taller box now overlaps, only as far as needed
+  const drops = resolveDrops(widened, edges, pivotId);
+  return widened.map(n => {
+    const drop = drops.get(n.id);
+    return drop ? { ...n, position: { x: n.position.x, y: n.position.y + drop } } : n;
   });
-
-  return widened.map(n =>
-    withChildren.has(n.id)
-      ? { ...n, position: { x: n.position.x, y: n.position.y + (withChildren.get(n.id) ?? 0) } }
-      : n
-  );
 };
 
 const visitAncestors = (
