@@ -22,3 +22,5 @@ Use a variety of nodes to accomplish a task:
 Simple yet powerful configuration:
 
 ![](./img/kiddie_flow_3.png)
+
+![](./img/kiddie_flow_4.png)
