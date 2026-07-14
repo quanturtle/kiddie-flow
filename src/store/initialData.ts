@@ -3,27 +3,18 @@ import { NodeData } from './types';
 import { createDefaultHandles } from './nodeUtils';
 import { CAT_IMAGE } from './catImage';
 
-const grayscaleCode = `from PIL import Image
-import base64, io
+const grayscaleCode = `from PIL.Image import Image
 
 
-def grayscale(image: str) -> str:
-    raw = base64.b64decode(image.split(",", 1)[1])
-    out = Image.open(io.BytesIO(raw)).convert("L")
-    buf = io.BytesIO()
-    out.save(buf, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()`;
+def grayscale(image: Image) -> Image:
+    return image.convert("L")`;
 
-const blurCode = `from PIL import Image, ImageFilter
-import base64, io
+const blurCode = `from PIL import ImageFilter
+from PIL.Image import Image
 
 
-def blur(image: str) -> str:
-    raw = base64.b64decode(image.split(",", 1)[1])
-    out = Image.open(io.BytesIO(raw)).filter(ImageFilter.GaussianBlur(4))
-    buf = io.BytesIO()
-    out.save(buf, format="PNG")
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()`;
+def blur(image: Image) -> Image:
+    return image.filter(ImageFilter.GaussianBlur(4))`;
 
 const sortDedupeCode = `def sort_dedupe(numbers: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(sorted(set(numbers)))`;

@@ -19,6 +19,7 @@ type Pyodide = {
   toPy: (value: unknown) => PyNamespace;
   setStdout: (options: { batched: (text: string) => void }) => void;
   setStderr: (options: { batched: (text: string) => void }) => void;
+  loadPackage: (names: string | string[]) => Promise<unknown>;
   loadPackagesFromImports: (code: string) => Promise<unknown>;
 };
 
@@ -26,12 +27,34 @@ type Pyodide = {
 // values move between nodes as python literals: tuples/numbers round-trip directly, and a
 // node can move a richer type by defining a @dataclass above its function (repr() out here,
 // reconstructed by eval() in the receiving node where the same dataclass is defined).
+// images are the exception: they travel the wire as data-URI strings but a node works with a
+// PIL Image directly — an incoming data URI opens into an Image, and a returned Image is
+// re-encoded to a PNG data URI, so node code stays a plain transform with no base64 plumbing.
 const CALL_EPILOGUE = `
 def __kf_decode(__s):
+    if isinstance(__s, str) and __s.startswith("data:image"):
+        import base64, io
+        from PIL import Image
+        return Image.open(io.BytesIO(base64.b64decode(__s.split(",", 1)[1])))
     try:
         return eval(__s, globals())
     except Exception:
         return __s
+
+try:
+    from PIL.Image import Image as __kf_Image
+except Exception:
+    __kf_Image = ()
+
+def __kf_encode(__r):
+    if __r is None:
+        return ""
+    if isinstance(__r, __kf_Image):
+        import base64, io
+        __buf = io.BytesIO()
+        __r.save(__buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(__buf.getvalue()).decode()
+    return __r if isinstance(__r, str) else repr(__r)
 
 __kf_target = globals().get(__kf_name)
 if __kf_target is None:
@@ -42,7 +65,7 @@ if __kf_target is None:
     raise NameError("define a function named '" + __kf_name + "'")
 
 __kf_ret = __kf_target(*[__kf_decode(__a) for __a in __kf_args])
-__kf_output = "" if __kf_ret is None else (__kf_ret if isinstance(__kf_ret, str) else repr(__kf_ret))
+__kf_output = __kf_encode(__kf_ret)
 `;
 
 let pyodidePromise: Promise<Pyodide> | null = null;
@@ -91,9 +114,13 @@ export const runPython = async (
   pyodide.setStdout({ batched: (text: string) => lines.push(text) });
   pyodide.setStderr({ batched: (text: string) => lines.push(text) });
 
-  // pull in any bundled packages the code imports (e.g. Pillow for image work)
+  // pull in any bundled packages the code imports, plus Pillow whenever an image is passed in
+  // (the runtime opens the incoming data URI even when the node body no longer imports PIL)
   const fullCode = RUNTIME_PRELUDE + code + '\n' + CALL_EPILOGUE;
   await pyodide.loadPackagesFromImports(code);
+  if (args.some(arg => arg.startsWith('data:image'))) {
+    await pyodide.loadPackage('Pillow');
+  }
 
   // run in a fresh namespace so nodes never leak state into one another
   const namespace = pyodide.toPy({ __kf_args: args, __kf_name: functionName });
