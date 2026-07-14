@@ -74,7 +74,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '2',
     type: 'flowNode',
-    position: { x: 720, y: 0 },
+    position: { x: 720, y: -40 },
     data: {
       title: 'sort_dedupe',
       description: 'Returns a sorted tuple of the unique numbers',
@@ -96,7 +96,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '3',
     type: 'flowNode',
-    position: { x: 1440, y: 0 },
+    position: { x: 1440, y: -80 },
     data: {
       title: 'statistics',
       description: 'Packs the numbers into a Stats dataclass',
@@ -118,7 +118,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '4',
     type: 'flowNode',
-    position: { x: 2160, y: 0 },
+    position: { x: 2160, y: -120 },
     data: {
       title: 'report',
       description: 'Unpacks the Stats dataclass into a readable summary',
@@ -140,7 +140,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '5',
     type: 'flowNode',
-    position: { x: 2880, y: 0 },
+    position: { x: 2880, y: -160 },
     data: {
       title: 'Summary',
       description: 'Displays the final report',
