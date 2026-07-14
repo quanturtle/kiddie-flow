@@ -275,6 +275,8 @@ export function TextNode({ id, data }: NodeProps) {
   // otherwise, holding its own uploaded image makes it a loader that emits downstream.
   const incomingImage = data.inputValues[data.inputHandles[0]?.id ?? ''] ?? '';
   const isImageLoader = !hasIncomingEdge && isImageValue(data.text);
+  // an image node is only resizable once it's actually showing an image, not while awaiting or prompting for one
+  const showsImage = data.type !== 'image' || isImageLoader || (hasIncomingEdge && isImageValue(incomingImage));
 
   const style = nodeStyles[data.type];
   const Icon = style.icon;
@@ -700,7 +702,7 @@ export function TextNode({ id, data }: NodeProps) {
         </div>
       </div>
 
-      {!data.isCollapsed && <ResizeHandle />}
+      {!data.isCollapsed && showsImage && <ResizeHandle />}
     </div>
   );
 }
