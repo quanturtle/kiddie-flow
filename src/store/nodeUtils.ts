@@ -69,8 +69,8 @@ export const getDefaultDescription = (type: NodeType) => {
   switch (type) {
     case 'text': return 'Transforms text input using template syntax';
     case 'image': return 'Processes image data';
-    case 'voice': return 'Handles voice and audio processing';
-    case 'javascript': return 'Executes JavaScript code';
+    case 'voice': return 'Scaffolding — audio processing not wired to execution yet';
+    case 'javascript': return 'Scaffolding — runs as a text template; no JS engine yet';
     case 'python': return 'Runs Python code';
     case 'result': return 'Displays final output';
     case 'source': return 'Provides initial input data';
