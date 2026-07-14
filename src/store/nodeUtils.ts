@@ -1,4 +1,4 @@
-import { Node, Edge } from 'reactflow';
+import { Node } from 'reactflow';
 import { NodeData, HandleConfig, NodeType } from './types';
 
 // Keep track of the highest ID used so far
@@ -44,6 +44,25 @@ export const generateUniqueNodeId = (nodes: Node[]): string => {
   } while (existingIds.has(highestId));
 
   return highestId.toString();
+};
+
+export const getNodeOutput = (node: Node<NodeData>): string => {
+  // a python node emits whatever its last run printed; everything else templates its text
+  if (node.data.type === 'python') {
+    return node.data.computedOutput ?? '';
+  }
+  return processNodeText(node.data.text, node.data.inputValues, node.data.inputHandles);
+};
+
+export const getPythonArgs = (data: NodeData): string[] => {
+  // inputs passed positionally to the node's function, in handle order
+  return data.inputHandles.map(handle => data.inputValues[handle.id] ?? '');
+};
+
+export const toPythonFunctionName = (title: string): string => {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const safe = slug || 'run';
+  return /^[0-9]/.test(safe) ? `_${safe}` : safe;
 };
 
 export const getDefaultDescription = (type: NodeType) => {

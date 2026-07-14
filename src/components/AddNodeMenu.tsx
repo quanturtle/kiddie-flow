@@ -1,6 +1,9 @@
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useStore, NodeType } from '../store/flowStore';
+import { nodeStyles, ACCENT, SOFT_SHADOW } from '../theme/nodeTheme';
+
+const menuOrder: NodeType[] = ['text', 'image', 'voice', 'javascript', 'python', 'source', 'preview', 'result'];
 
 export function AddNodeMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -15,61 +18,31 @@ export function AddNodeMenu() {
     <div className="absolute top-4 left-4 z-10">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+        className={`p-2 ${ACCENT} border-2 border-black rounded-lg transition-colors ${SOFT_SHADOW}`}
+        title="Add node"
       >
-        <Plus className="w-5 h-5" />
+        <Plus className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-45' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white border-2 border-black rounded shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-w-[120px]">
-          <button
-            onClick={() => handleAddNode('text')}
-            className="w-full px-4 py-2 text-left hover:bg-blue-100 border-b-2 border-black"
-          >
-            Text
-          </button>
-          <button
-            onClick={() => handleAddNode('image')}
-            className="w-full px-4 py-2 text-left hover:bg-red-100 border-b-2 border-black"
-          >
-            Image
-          </button>
-          <button
-            onClick={() => handleAddNode('voice')}
-            className="w-full px-4 py-2 text-left hover:bg-yellow-100 border-b-2 border-black"
-          >
-            Voice
-          </button>
-          <button
-            onClick={() => handleAddNode('javascript')}
-            className="w-full px-4 py-2 text-left hover:bg-purple-100 border-b-2 border-black"
-          >
-            JavaScript
-          </button>
-          <button
-            onClick={() => handleAddNode('python')}
-            className="w-full px-4 py-2 text-left hover:bg-green-100 border-b-2 border-black"
-          >
-            Python
-          </button>
-          <button
-            onClick={() => handleAddNode('source')}
-            className="w-full px-4 py-2 text-left hover:bg-zinc-100 border-b-2 border-black"
-          >
-            Source
-          </button>
-          <button
-            onClick={() => handleAddNode('preview')}
-            className="w-full px-4 py-2 text-left hover:bg-amber-900/10 border-b-2 border-black"
-          >
-            Preview
-          </button>
-          <button
-            onClick={() => handleAddNode('result')}
-            className="w-full px-4 py-2 text-left hover:bg-black/10"
-          >
-            Result
-          </button>
+        <div className="absolute top-full left-0 mt-2 bg-white border-2 border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] overflow-hidden min-w-[160px]">
+          {menuOrder.map((type, i) => {
+            const { icon: Icon, bg } = nodeStyles[type];
+            return (
+              <button
+                key={type}
+                onClick={() => handleAddNode(type)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left font-semibold text-sm hover:bg-gray-100 transition-colors ${
+                  i < menuOrder.length - 1 ? 'border-b-2 border-black' : ''
+                }`}
+              >
+                <span className={`w-6 h-6 flex items-center justify-center border-2 border-black rounded-md ${bg}`}>
+                  <Icon className="w-3.5 h-3.5 text-black" />
+                </span>
+                <span className="capitalize">{type}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

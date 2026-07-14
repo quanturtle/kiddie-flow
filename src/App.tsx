@@ -1,22 +1,24 @@
 import React from 'react';
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   NodeTypes,
   OnNodeClick,
   OnNodeDoubleClick,
-  Node,
-  useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { HelpCircle, Github } from 'lucide-react';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { HelpCircle, Github, FlaskConical } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 import { TextNode } from './components/TextNode';
 import { Sidebar } from './components/Sidebar';
 import { AddNodeMenu } from './components/AddNodeMenu';
+import { Labs } from './labs/Labs';
 import { useStore } from './store/flowStore';
+import { CANVAS_BG, CANVAS_DOT } from './theme/nodeTheme';
 
 const nodeTypes: NodeTypes = {
   flowNode: TextNode,
@@ -24,6 +26,9 @@ const nodeTypes: NodeTypes = {
 
 // Default viewport that shows all demo nodes
 const defaultViewport = { x: 400, y: 175, zoom: 0.85 };
+
+// Bold black connections to match the Classic Pop frames
+const defaultEdgeOptions = { style: { stroke: '#000000', strokeWidth: 2.5 } };
 
 function Flow() {
   const {
@@ -35,8 +40,6 @@ function Flow() {
     setSelectedNode,
     selectedNode,
   } = useStore();
-
-  const { getNode } = useReactFlow();
 
   const handleNodeClick: OnNodeClick = (_, node) => {
     // If sidebar is already open, switch context to the clicked node
@@ -63,7 +66,7 @@ function Flow() {
   };
 
   return (
-    <div className="w-screen h-screen">
+    <div className="w-screen h-screen" style={{ backgroundColor: CANVAS_BG }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -75,9 +78,10 @@ function Flow() {
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         defaultViewport={defaultViewport}
+        defaultEdgeOptions={defaultEdgeOptions}
         fitView
       >
-        <Background />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={2} color={CANVAS_DOT} />
         <Controls />
         <AddNodeMenu />
 
@@ -85,20 +89,27 @@ function Flow() {
         <div className="absolute bottom-4 right-4 z-10">
           <button
             onClick={handleHelpClick}
-            className="p-2 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            className="p-2 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             title="Help"
           >
             <HelpCircle className="w-5 h-5" />
           </button>
         </div>
 
-        {/* GitHub button */}
-        <div className="absolute top-4 right-4 z-10">
+        {/* Top-right actions */}
+        <div className="absolute top-4 right-4 z-10 flex gap-2">
+          <Link
+            to="/labs"
+            className="p-2 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] inline-flex items-center justify-center"
+            title="Design labs"
+          >
+            <FlaskConical className="w-5 h-5" />
+          </Link>
           <a
             href="https://github.com/quanturtle/kiddie-flow"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] inline-flex items-center justify-center"
+            className="p-2 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] inline-flex items-center justify-center"
             title="View on GitHub"
           >
             <Github className="w-5 h-5" />
@@ -111,11 +122,22 @@ function Flow() {
   );
 }
 
-function App() {
+function EditorPage() {
   return (
     <ReactFlowProvider>
       <Flow />
     </ReactFlowProvider>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<EditorPage />} />
+        <Route path="/labs" element={<Labs />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

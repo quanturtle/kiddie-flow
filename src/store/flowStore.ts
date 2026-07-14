@@ -2,20 +2,19 @@ import {
   Connection,
   Edge,
   EdgeChange,
-  Node,
   NodeChange,
   addEdge,
-  OnNodesChange,
-  OnEdgesChange,
-  OnConnect,
   applyNodeChanges,
   applyEdgeChanges,
 } from 'reactflow';
 import { create } from 'zustand';
-import { NodeData, NodeType, SourceInputType } from './types';
-import { createDefaultHandles, processNodeText } from './nodeUtils';
-import { updateDownstreamNodes, createNewNode } from './nodeOperations';
+import { NodeData, NodeType, SourceInputType, RFState } from './types';
+import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
+import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, shiftDownstream } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
+import { runPython } from '../runtime/pythonRuntime';
+
+export type { NodeType } from './types';
 
 export const useStore = create<RFState>((set, get) => {
   // Create the store
@@ -23,11 +22,29 @@ export const useStore = create<RFState>((set, get) => {
     nodes: initialNodes,
     edges: initialEdges,
     selectedNode: null,
+    pendingExpand: null,
+    expandShifts: {},
 
     onNodesChange: (changes: NodeChange[]) => {
-      set({
-        nodes: applyNodeChanges(changes, get().nodes),
-      });
+      const updated = applyNodeChanges(changes, get().nodes);
+      const pending = get().pendingExpand;
+
+      // as the just-expanded node grows, slide everything to its right to keep pace
+      const resized = pending !== null && changes.some(c => c.type === 'dimensions' && c.id === pending.id);
+      if (pending !== null && resized) {
+        const node = updated.find(n => n.id === pending.id);
+        const desired = Math.max(0, (node?.width ?? pending.baseWidth) - pending.baseWidth);
+        const applied = get().expandShifts[pending.id] ?? 0;
+        const diff = desired - applied;
+        if (diff !== 0) {
+          set({
+            nodes: shiftDownstream(updated, pending.id, diff),
+            expandShifts: { ...get().expandShifts, [pending.id]: desired },
+          });
+          return;
+        }
+      }
+      set({ nodes: updated });
     },
 
     onEdgesChange: (changes: EdgeChange[]) => {
@@ -80,11 +97,7 @@ export const useStore = create<RFState>((set, get) => {
 
         if (existingConnection) return;
 
-        const processedText = processNodeText(
-          sourceNode.data.text,
-          sourceNode.data.inputValues,
-          sourceNode.data.inputHandles
-        );
+        const processedText = getNodeOutput(sourceNode);
 
         const newEdges = addEdge(connection, get().edges);
         const updatedNodes = updateDownstreamNodes(
@@ -202,6 +215,41 @@ export const useStore = create<RFState>((set, get) => {
           }),
         });
       }
+    },
+
+    toggleCollapse: (nodeId: string) => {
+      const node = get().nodes.find(n => n.id === nodeId);
+      if (!node) return;
+
+      const willCollapse = !node.data.isCollapsed;
+
+      // flip the flag and close the side panels
+      let nodes = get().nodes.map(n =>
+        n.id === nodeId
+          ? { ...n, data: { ...n.data, isCollapsed: willCollapse, showInputs: false, showOutput: false } }
+          : n
+      );
+
+      if (willCollapse) {
+        // slide the right-hand nodes back to where they were before this node expanded
+        const shift = get().expandShifts[nodeId];
+        if (shift) {
+          nodes = shiftDownstream(nodes, nodeId, -shift);
+          const rest = { ...get().expandShifts };
+          delete rest[nodeId];
+          set({ nodes, expandShifts: rest, pendingExpand: null });
+          return;
+        }
+        set({ nodes });
+        return;
+      }
+
+      // expanding: remember the collapsed width; the resize handler pushes once measured
+      set({ nodes, pendingExpand: { id: nodeId, baseWidth: node.width ?? 440 } });
+      setTimeout(() => {
+        const pending = get().pendingExpand;
+        if (pending && pending.id === nodeId) set({ pendingExpand: null });
+      }, 500);
     },
 
     addNode: (type: NodeType) => {
@@ -388,6 +436,49 @@ export const useStore = create<RFState>((set, get) => {
         edges: updatedEdges,
         nodes: updatedNodes,
       });
+    },
+
+    runPythonNode: async (nodeId: string) => {
+      const target = get().nodes.find(n => n.id === nodeId);
+      if (!target || target.data.type !== 'python') return;
+
+      // run this node's python ancestors first, then the node — never anything downstream
+      const runOrder = collectPythonRunOrder(get().nodes, get().edges, nodeId);
+
+      for (const id of runOrder) {
+        const node = get().nodes.find(n => n.id === id);
+        if (!node) continue;
+
+        // flag the node as running
+        set({
+          nodes: get().nodes.map(n =>
+            n.id === id ? { ...n, data: { ...n.data, isRunning: true, runError: undefined } } : n
+          ),
+        });
+
+        // run the node's function (named after the node) with upstream inputs as arguments,
+        // prepending ancestor definitions so upstream dataclasses are available here
+        const functionName = toPythonFunctionName(node.data.title);
+        const args = getPythonArgs(node.data);
+        const code = buildExecutableCode(get().nodes, get().edges, id);
+        const result = await runPython(code, functionName, args);
+
+        // store the output and propagate the value so the next node sees fresh inputs
+        const applied = get().nodes.map(n =>
+          n.id === id
+            ? {
+                ...n,
+                data: {
+                  ...n.data,
+                  isRunning: false,
+                  computedOutput: result.output,
+                  runError: result.ok ? undefined : result.error,
+                },
+              }
+            : n
+        );
+        set({ nodes: updateDownstreamNodes(applied, get().edges, id) });
+      }
     },
   };
 

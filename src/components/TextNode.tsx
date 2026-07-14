@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
-import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, ChevronDown, ChevronUp, Minus } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, Minus, Loader2, AlertTriangle } from 'lucide-react';
+import CodeEditor from '@uiw/react-textarea-code-editor';
 import { useStore, NodeType } from '../store/flowStore';
+import { nodeStyles, HARD_SHADOW, SOFT_SHADOW, ACCENT } from '../theme/nodeTheme';
 
 interface NodeProps {
   id: string;
@@ -24,17 +26,6 @@ interface NodeProps {
   };
 }
 
-const typeColors = {
-  text: 'bg-blue-200 border-blue-400',
-  image: 'bg-red-200 border-red-400',
-  voice: 'bg-yellow-200 border-yellow-400',
-  javascript: 'bg-purple-200 border-purple-400',
-  python: 'bg-green-200 border-green-400',
-  result: 'bg-black border-gray-700 text-white',
-  source: 'bg-zinc-200 border-zinc-400',
-  preview: 'bg-amber-100 border-amber-300',
-};
-
 const ANIMATION_DURATION = 200;
 const DEBOUNCE_DELAY = 2000; // 2 seconds delay for text updates
 
@@ -42,6 +33,8 @@ export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
   const updateNodeConfig = useStore(state => state.updateNodeConfig);
   const removeLastInput = useStore(state => state.removeLastInput);
+  const runPythonNode = useStore(state => state.runPythonNode);
+  const toggleCollapseNode = useStore(state => state.toggleCollapse);
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState(false);
@@ -156,6 +149,15 @@ export function TextNode({ id, data }: NodeProps) {
     data.onChange(localText);
   };
 
+  const handleRun = () => {
+    // flush the latest code before executing, cancelling the pending debounce
+    if (debouncedUpdateRef.current) {
+      clearTimeout(debouncedUpdateRef.current);
+    }
+    data.onChange(localText);
+    runPythonNode(id);
+  };
+
   const toggleInputs = () => {
     startTransition();
     updateNodeConfig(id, { showInputs: !data.showInputs });
@@ -168,16 +170,7 @@ export function TextNode({ id, data }: NodeProps) {
 
   const toggleCollapse = () => {
     startTransition();
-    updateNodeConfig(id, { 
-      isCollapsed: !data.isCollapsed,
-      showInputs: false,
-      showOutput: false
-    });
-  };
-
-  const toggleDescription = () => {
-    startTransition();
-    updateNodeConfig(id, { showDescription: !data.showDescription });
+    toggleCollapseNode(id);
   };
 
   const addInput = () => {
@@ -242,24 +235,36 @@ export function TextNode({ id, data }: NodeProps) {
     return result;
   }, [data.text, data.inputValues, data.inputHandles]);
 
+  const pythonSignature = useMemo(() => {
+    const line = data.text.split('\n').find(l => l.trim().startsWith('def '));
+    return line ? line.trim().replace(/:\s*$/, '') : '';
+  }, [data.text]);
+
+  const style = nodeStyles[data.type];
+  const Icon = style.icon;
+
   return (
-    <div 
+    <div
       ref={nodeRef}
-      className={`rounded-lg border-4 relative shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${typeColors[data.type]}`}
-      style={{ 
-        transform: 'translate(-50%, -50%)',
-        padding: data.isCollapsed ? '8px' : '16px',
+      className={`rounded-2xl border-4 border-black relative ${HARD_SHADOW} ${style.bg}`}
+      style={{
+        // anchor at the left edge so expanding grows the node to the right, keeping the
+        // input handle (and the incoming edge) fixed in place
+        transform: 'translate(0, -50%)',
+        // constant padding so the left handle never shifts when the node expands
+        padding: '16px',
         minHeight: data.isCollapsed ? '48px' : 'auto',
         width: '100%',
         transition: `all ${ANIMATION_DURATION}ms ease-in-out`,
       }}
     >
       <div className="flex gap-6 relative">
-        <div 
-          className="absolute left-0 h-full flex flex-col justify-center" 
-          style={{ 
-            width: '20px', 
-            transform: 'translateX(-32px)',
+        <div
+          className="absolute left-0 h-full flex flex-col justify-center"
+          style={{
+            width: '20px',
+            // 8px clear of the node's left edge
+            transform: 'translateX(-31px)',
             transition: `height ${ANIMATION_DURATION}ms ease-in-out`
           }}
         >
@@ -269,7 +274,7 @@ export function TextNode({ id, data }: NodeProps) {
               id={handle.id}
               type="target"
               position={Position.Left}
-              className="w-3 h-3 !bg-black"
+              className="w-3.5 h-3.5 !bg-white !border-2 !border-black"
               style={{ 
                 top: `${inputPositions[i]}%`
               }}
@@ -277,52 +282,73 @@ export function TextNode({ id, data }: NodeProps) {
           ))}
         </div>
 
-        <div className="w-full min-w-[300px]" style={{ transition: `width ${ANIMATION_DURATION}ms ease-in-out` }}>
-          <div className={`flex flex-col gap-1 ${!data.isCollapsed && 'mb-4'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className={`text-xs uppercase ${data.type === 'result' ? 'bg-white text-black' : 'bg-black text-white'} px-1.5 py-0.5 rounded shrink-0`}>
-                  {data.type}
+        <div className={`w-full ${data.type === 'python' ? (data.isCollapsed ? 'min-w-[440px]' : 'min-w-[760px]') : 'min-w-[300px]'}`} style={{ transition: `width ${ANIMATION_DURATION}ms ease-in-out` }}>
+          <div className={`flex flex-col gap-2 ${!data.isCollapsed ? '-mx-4 -mt-4 px-4 pt-4 pb-3 mb-4 border-b-4 border-black' : ''}`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <span className="w-9 h-9 flex items-center justify-center bg-white text-black border-2 border-black rounded-xl shrink-0">
+                  <Icon className="w-4 h-4" />
                 </span>
-                <h3 className="font-bold truncate">{data.title || `Node ${id}`}</h3>
+                <div className="min-w-0">
+                  <div className={`text-[10px] font-bold uppercase tracking-wider ${style.dark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {data.type}
+                  </div>
+                  <h3 className="font-extrabold leading-tight truncate">{data.title || `Node ${id}`}</h3>
+                </div>
               </div>
-              <div className="flex gap-1.5 ml-3 shrink-0">
+              <div className="flex gap-1.5 shrink-0">
                 <button
                   onClick={toggleCollapse}
-                  className={`p-1 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] ${data.type === 'result' ? 'text-black' : ''}`}
+                  className={`p-1.5 bg-white text-black border-2 border-black rounded-lg hover:bg-gray-100 transition-colors ${SOFT_SHADOW}`}
                   title={data.isCollapsed ? "Expand node" : "Collapse node"}
                 >
                   {data.isCollapsed ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
                 {!['result', 'source', 'preview'].includes(data.type) && (
                   <button
-                    onClick={handlePlay}
-                    className="p-1 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                    title="Send text to connected nodes"
+                    onClick={data.type === 'python' ? handleRun : handlePlay}
+                    disabled={data.isRunning}
+                    className={`p-1.5 ${ACCENT} text-black border-2 border-black rounded-lg transition-colors ${SOFT_SHADOW} ${data.isRunning ? 'opacity-70' : ''}`}
+                    title={data.type === 'python' ? 'Run Python' : 'Send text to connected nodes'}
                   >
-                    <Play className="w-4 h-4" />
+                    {data.isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                   </button>
                 )}
               </div>
             </div>
 
-            {(data.description || data.isCollapsed) && (
-              <div className="flex items-start gap-1.5">
-                <button
-                  onClick={toggleDescription}
-                  className="p-0.5 mt-0.5 hover:bg-black/5 rounded"
-                  title={data.showDescription ? "Hide description" : "Show description"}
-                >
-                  {data.showDescription ? (
-                    <ChevronUp className="w-3 h-3 text-gray-500" />
-                  ) : (
-                    <ChevronDown className="w-3 h-3 text-gray-500" />
-                  )}
-                </button>
-                {data.showDescription && (
-                  <p className="text-sm text-gray-500 flex-1 line-clamp-2">{data.description}</p>
+            {data.description && (
+              <p className={`text-sm ${style.dark ? 'text-gray-400' : 'text-gray-500'}`}>{data.description}</p>
+            )}
+
+            {data.type === 'python' && data.isCollapsed && pythonSignature && (
+              <code className="font-mono text-xs bg-white border-2 border-black rounded-md px-2 py-1 truncate">
+                {pythonSignature}
+              </code>
+            )}
+
+            {data.type === 'python' && data.isCollapsed && (data.isRunning || data.computedOutput || data.runError) && (
+              <>
+                {data.isRunning ? (
+                  <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <Loader2 className="w-3 h-3 animate-spin" /> running…
+                  </div>
+                ) : data.runError ? (
+                  <pre
+                    className="font-mono text-xs bg-red-50 text-red-700 border-2 border-red-500 rounded-md px-2 py-1 whitespace-pre-wrap overflow-auto"
+                    style={{ maxHeight: 120 }}
+                  >
+                    {data.runError}
+                  </pre>
+                ) : (
+                  <pre
+                    className="font-mono text-xs bg-gray-900 text-lime-300 border-2 border-black rounded-md px-2 py-1 whitespace-pre-wrap overflow-auto"
+                    style={{ maxHeight: 120 }}
+                  >
+                    {data.computedOutput}
+                  </pre>
                 )}
-              </div>
+              </>
             )}
           </div>
 
@@ -334,7 +360,7 @@ export function TextNode({ id, data }: NodeProps) {
                   <textarea
                     value={data.text}
                     readOnly
-                    className="w-full p-2 border-2 border-black rounded bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
+                    className="w-full p-2 border-2 border-black rounded-lg bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
                     rows={8}
                     placeholder="Connected input will appear here..."
                   />
@@ -345,7 +371,7 @@ export function TextNode({ id, data }: NodeProps) {
                   <textarea
                     value={data.text}
                     readOnly
-                    className="w-full p-2 border-2 border-gray-700 rounded bg-gray-900 text-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
+                    className="w-full p-2 border-2 border-gray-700 rounded-lg bg-gray-900 text-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
                     rows={8}
                     placeholder="Connected input will appear here..."
                   />
@@ -356,12 +382,13 @@ export function TextNode({ id, data }: NodeProps) {
                   <textarea
                     value={localText}
                     onChange={handleChange}
-                    className="w-full p-2 border-2 border-black rounded resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     rows={8}
                     placeholder="Enter your source text here..."
                   />
                 </div>
               ) : (
+                <>
                 <div className="flex w-full gap-4">
                   {!['result', 'source', 'preview'].includes(data.type) && (
                     <>
@@ -370,7 +397,7 @@ export function TextNode({ id, data }: NodeProps) {
                           <div className="space-y-2">
                             <button
                               onClick={addInput}
-                              className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                              className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                               title="Add input"
                               disabled={data.inputs >= 5}
                             >
@@ -378,7 +405,7 @@ export function TextNode({ id, data }: NodeProps) {
                             </button>
                             <button
                               onClick={handleRemoveLastInput}
-                              className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                              className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                               title="Remove last input"
                               disabled={data.inputs <= 1}
                             >
@@ -386,7 +413,7 @@ export function TextNode({ id, data }: NodeProps) {
                             </button>
                             <button
                               onClick={toggleInputs}
-                              className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                              className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                               title="Show inputs"
                             >
                               <ChevronRight className="w-3 h-3" />
@@ -400,7 +427,7 @@ export function TextNode({ id, data }: NodeProps) {
                             <div className="flex gap-2">
                               <button
                                 onClick={addInput}
-                                className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                                 title="Add input"
                                 disabled={data.inputs >= 5}
                               >
@@ -408,7 +435,7 @@ export function TextNode({ id, data }: NodeProps) {
                               </button>
                               <button
                                 onClick={handleRemoveLastInput}
-                                className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                                 title="Remove last input"
                                 disabled={data.inputs <= 1}
                               >
@@ -416,7 +443,7 @@ export function TextNode({ id, data }: NodeProps) {
                               </button>
                               <button
                                 onClick={toggleInputs}
-                                className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                                className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                                 title="Hide inputs"
                               >
                                 <ChevronLeft className="w-3 h-3" />
@@ -428,10 +455,10 @@ export function TextNode({ id, data }: NodeProps) {
                             <div className="text-xs font-semibold uppercase text-gray-500 px-2">Value</div>
                             {data.inputHandles.map(handle => (
                               <React.Fragment key={handle.id}>
-                                <div className="p-2 border-2 border-black rounded bg-gray-50 text-gray-600 text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                                <div className="p-2 border-2 border-black rounded-lg bg-gray-50 text-gray-600 text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                                   {handle.label}
                                 </div>
-                                <div className="p-2 border-2 border-black rounded bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] overflow-hidden whitespace-nowrap text-ellipsis">
+                                <div className="p-2 border-2 border-black rounded-lg bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] overflow-hidden whitespace-nowrap text-ellipsis">
                                   {data.inputValues[handle.id] || 'value'}
                                 </div>
                               </React.Fragment>
@@ -444,21 +471,45 @@ export function TextNode({ id, data }: NodeProps) {
                       )}
 
                       <div className="flex-1">
-                        <div className="text-xs font-bold mb-2 uppercase text-gray-600">Transform</div>
-                        <textarea
-                          value={localText}
-                          onChange={handleChange}
-                          className="w-full p-2 border-2 border-black rounded resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                          rows={8}
-                          placeholder="Enter your transform text here... Use {input_1} to reference inputs"
-                        />
+                        <div className="text-xs font-bold mb-2 uppercase text-gray-600">
+                          {data.type === 'python' ? 'Python' : 'Transform'}
+                        </div>
+                        {data.type === 'python' ? (
+                          <div
+                            className="nodrag border-2 border-black rounded-lg overflow-auto bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            style={{ height: 340 }}
+                          >
+                            <CodeEditor
+                              value={localText}
+                              language="python"
+                              onChange={handleChange}
+                              placeholder={'def node_name(input_1: str) -> str:\n    return result'}
+                              padding={12}
+                              data-color-mode="light"
+                              style={{
+                                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                                fontSize: 13,
+                                backgroundColor: 'transparent',
+                                minHeight: '100%',
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <textarea
+                            value={localText}
+                            onChange={handleChange}
+                            className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            rows={8}
+                            placeholder="Enter your transform text here... Use {input_1} to reference inputs"
+                          />
+                        )}
                       </div>
 
-                      {!data.showOutput ? (
+                      {data.type === 'python' ? null : !data.showOutput ? (
                         <div className="w-8 flex flex-col justify-center items-center border-l-2 border-black">
                           <button
                             onClick={toggleOutput}
-                            className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                            className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                             title="Show output"
                           >
                             <ChevronLeft className="w-3 h-3" />
@@ -470,7 +521,7 @@ export function TextNode({ id, data }: NodeProps) {
                             <div className="text-xs font-bold uppercase text-gray-600">Output</div>
                             <button
                               onClick={toggleOutput}
-                              className="p-0.5 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
+                              className="p-0.5 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
                               title="Hide output"
                             >
                               <ChevronRight className="w-3 h-3" />
@@ -479,7 +530,7 @@ export function TextNode({ id, data }: NodeProps) {
                           <textarea
                             value={processedText}
                             readOnly
-                            className="w-full p-2 border-2 border-black rounded resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                             rows={8}
                             placeholder="Transformed text will appear here..."
                           />
@@ -488,16 +539,49 @@ export function TextNode({ id, data }: NodeProps) {
                     </>
                   )}
                 </div>
+
+                {data.type === 'python' && (
+                  <div className="mt-4">
+                    <div className="text-xs font-bold mb-2 uppercase text-gray-600 flex items-center gap-2">
+                      Output
+                      {data.isRunning && (
+                        <span className="flex items-center gap-1 text-gray-500 normal-case font-normal">
+                          <Loader2 className="w-3 h-3 animate-spin" /> running…
+                        </span>
+                      )}
+                    </div>
+                    {data.runError ? (
+                      <pre
+                        className="w-full p-2 border-2 border-red-500 rounded-lg bg-red-50 text-red-700 text-xs whitespace-pre-wrap overflow-auto shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                        style={{ maxHeight: 220 }}
+                      >
+                        <span className="flex items-center gap-1 font-bold mb-1">
+                          <AlertTriangle className="w-3 h-3" /> Error
+                        </span>
+                        {data.runError}
+                      </pre>
+                    ) : (
+                      <pre
+                        className="w-full p-2 border-2 border-black rounded-lg bg-gray-900 text-lime-300 text-xs font-mono whitespace-pre-wrap overflow-auto shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                        style={{ maxHeight: 220, minHeight: 48 }}
+                      >
+                        {data.computedOutput || 'Click ▶ Run to execute this node.'}
+                      </pre>
+                    )}
+                  </div>
+                )}
+                </>
               )}
             </>
           )}
         </div>
 
-        <div 
-          className="absolute right-0 h-full flex flex-col justify-center" 
-          style={{ 
-            width: '20px', 
-            transform: 'translateX(32px)',
+        <div
+          className="absolute right-0 h-full flex flex-col justify-center"
+          style={{
+            width: '20px',
+            // 8px clear of the shadow, which extends 5px past the node's right edge
+            transform: 'translateX(36px)',
             transition: `height ${ANIMATION_DURATION}ms ease-in-out`
           }}
         >
@@ -507,7 +591,7 @@ export function TextNode({ id, data }: NodeProps) {
               id={handle.id}
               type="source"
               position={Position.Right}
-              className="w-3 h-3 !bg-black"
+              className="w-3.5 h-3.5 !bg-white !border-2 !border-black"
               style={{ 
                 top: `${outputPositions[i]}%`
               }}

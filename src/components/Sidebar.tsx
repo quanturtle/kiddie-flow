@@ -1,5 +1,6 @@
 import { useStore, NodeType } from '../store/flowStore';
 import { X, Plus, Minus } from 'lucide-react';
+import { nodeStyles } from '../theme/nodeTheme';
 
 export function Sidebar() {
   const selectedNode = useStore(state => state.selectedNode);
@@ -31,6 +32,8 @@ export function Sidebar() {
     .filter(conn => conn.node);
 
   const createdAt = new Date(node.data.createdAt).toLocaleString();
+  const typeStyle = nodeStyles[node.data.type];
+  const TypeIcon = typeStyle.icon;
 
   const handleTypeChange = (type: NodeType) => {
     updateNodeConfig(selectedNode, { type });
@@ -54,10 +57,6 @@ export function Sidebar() {
     updateNodeConfig(selectedNode, { title });
   };
 
-  const handleTextChange = (text: string) => {
-    updateNodeConfig(selectedNode, { text });
-  };
-
   const handleDescriptionChange = (description: string) => {
     updateNodeConfig(selectedNode, { description });
   };
@@ -65,10 +64,15 @@ export function Sidebar() {
   return (
     <div className="fixed right-0 top-0 h-screen w-80 bg-white border-l-4 border-black p-6 overflow-y-auto shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold uppercase">Node Config</h2>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className={`w-9 h-9 flex items-center justify-center border-2 border-black rounded-xl shrink-0 ${typeStyle.bg}`}>
+            <TypeIcon className={`w-4 h-4 ${typeStyle.dark ? 'text-white' : 'text-black'}`} />
+          </span>
+          <h2 className="text-xl font-extrabold uppercase truncate">Node Config</h2>
+        </div>
         <button
           onClick={() => setSelectedNode(null)}
-          className="p-1 rounded hover:bg-gray-100 transition-colors border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+          className="p-1 rounded-lg hover:bg-gray-100 transition-colors border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] shrink-0"
         >
           <X className="w-5 h-5" />
         </button>
@@ -81,7 +85,7 @@ export function Sidebar() {
             type="text"
             value={node.data.title}
             onChange={(e) => handleTitleChange(e.target.value)}
-            className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            className="w-full p-2 border-2 border-black rounded-lg bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             placeholder="Enter node title..."
           />
         </div>
@@ -91,7 +95,7 @@ export function Sidebar() {
           <textarea
             value={node.data.description}
             onChange={(e) => handleDescriptionChange(e.target.value)}
-            className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            className="w-full p-2 border-2 border-black rounded-lg bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
             placeholder="Enter node description..."
             rows={2}
           />
@@ -102,7 +106,7 @@ export function Sidebar() {
           <select
             value={node.data.type}
             onChange={(e) => handleTypeChange(e.target.value as NodeType)}
-            className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+            className="w-full p-2 border-2 border-black rounded-lg bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
           >
             <option value="text">Text</option>
             <option value="image">Image</option>
@@ -110,17 +114,18 @@ export function Sidebar() {
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
             <option value="source">Source</option>
+            <option value="preview">Preview</option>
             <option value="result">Result</option>
           </select>
         </div>
 
-        <div className="border-2 border-black rounded p-4 space-y-4 bg-gray-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+        <div className="border-2 border-black rounded-lg p-4 space-y-4 bg-gray-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
           <div className="flex items-center justify-between">
             <label className="font-bold text-sm uppercase">Number of Inputs</label>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleInputsChange(-1)}
-                className="p-1 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                className="p-1 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                 disabled={node.data.inputs <= 1}
               >
                 <Minus className="w-4 h-4" />
@@ -128,7 +133,7 @@ export function Sidebar() {
               <span className="w-8 text-center font-bold">{node.data.inputs}</span>
               <button
                 onClick={() => handleInputsChange(1)}
-                className="p-1 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                className="p-1 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                 disabled={node.data.inputs >= 5}
               >
                 <Plus className="w-4 h-4" />
@@ -145,7 +150,7 @@ export function Sidebar() {
                   type="text"
                   value={handle.label}
                   onChange={(e) => handleLabelChange(handle.id, e.target.value, true)}
-                  className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  className="w-full p-2 border-2 border-black rounded-lg bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                   placeholder={`Label for ${handle.id}`}
                 />
               ))}
@@ -154,13 +159,13 @@ export function Sidebar() {
         </div>
 
         {node.data.type !== 'result' && (
-          <div className="border-2 border-black rounded p-4 space-y-4 bg-gray-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+          <div className="border-2 border-black rounded-lg p-4 space-y-4 bg-gray-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between">
               <label className="font-bold text-sm uppercase">Number of Outputs</label>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleOutputsChange(-1)}
-                  className="p-1 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  className="p-1 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                   disabled={node.data.outputs <= 1}
                 >
                   <Minus className="w-4 h-4" />
@@ -168,7 +173,7 @@ export function Sidebar() {
                 <span className="w-8 text-center font-bold">{node.data.outputs}</span>
                 <button
                   onClick={() => handleOutputsChange(1)}
-                  className="p-1 bg-white border-2 border-black rounded hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                  className="p-1 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                   disabled={node.data.outputs >= 5}
                 >
                   <Plus className="w-4 h-4" />
@@ -185,7 +190,7 @@ export function Sidebar() {
                     type="text"
                     value={handle.label}
                     onChange={(e) => handleLabelChange(handle.id, e.target.value, false)}
-                    className="w-full p-2 border-2 border-black rounded bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                    className="w-full p-2 border-2 border-black rounded-lg bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     placeholder={`Label for ${handle.id}`}
                   />
                 ))}
@@ -196,7 +201,7 @@ export function Sidebar() {
 
         <div className="space-y-2">
           <label className="font-bold text-sm uppercase">Created At</label>
-          <div className="p-2 border-2 border-black rounded bg-gray-50">{createdAt}</div>
+          <div className="p-2 border-2 border-black rounded-lg bg-gray-50">{createdAt}</div>
         </div>
 
         <div className="space-y-2">
@@ -217,7 +222,7 @@ export function Sidebar() {
               ))}
             </ul>
           ) : (
-            <div className="p-2 border-2 border-black rounded bg-gray-50">No parent nodes</div>
+            <div className="p-2 border-2 border-black rounded-lg bg-gray-50">No parent nodes</div>
           )}
         </div>
 
@@ -239,7 +244,7 @@ export function Sidebar() {
               ))}
             </ul>
           ) : (
-            <div className="p-2 border-2 border-black rounded bg-gray-50">No child nodes</div>
+            <div className="p-2 border-2 border-black rounded-lg bg-gray-50">No child nodes</div>
           )}
         </div>
       </div>

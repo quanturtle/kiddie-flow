@@ -1,6 +1,6 @@
 import { Node, Edge } from 'reactflow';
 import { NodeData, NodeType, SourceInputType } from './types';
-import { createDefaultHandles, processNodeText, generateUniqueNodeId, getDefaultDescription } from './nodeUtils';
+import { createDefaultHandles, generateUniqueNodeId, getDefaultDescription, getNodeOutput } from './nodeUtils';
 
 export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], sourceNodeId: string): Node<NodeData>[] => {
   const updatedNodes = [...nodes];
@@ -22,13 +22,7 @@ export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], so
       const sourceNode = updatedNodes.find(n => n.id === edge.source);
       if (!sourceNode) return;
 
-      const processedText = processNodeText(
-        sourceNode.data.text,
-        sourceNode.data.inputValues,
-        sourceNode.data.inputHandles
-      );
-
-      node.data.inputValues[edge.targetHandle] = processedText;
+      node.data.inputValues[edge.targetHandle] = getNodeOutput(sourceNode);
     });
 
     if (node.data.type === 'result' || node.data.type === 'preview') {
@@ -47,6 +41,53 @@ export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], so
 
   updateNode(sourceNodeId);
   return updatedNodes;
+};
+
+export const shiftDownstream = (nodes: Node<NodeData>[], pivotId: string, dx: number): Node<NodeData>[] => {
+  // move every node to the right of the pivot by dx (used to open/close room on expand/collapse)
+  const pivot = nodes.find(n => n.id === pivotId);
+  if (!pivot) return nodes;
+  const pivotX = pivot.position.x;
+  return nodes.map(n =>
+    n.id !== pivotId && n.position.x > pivotX
+      ? { ...n, position: { x: n.position.x + dx, y: n.position.y } }
+      : n
+  );
+};
+
+const visitAncestors = (
+  nodeId: string,
+  nodes: Node<NodeData>[],
+  edges: Edge[],
+  visited: Set<string>,
+  order: string[]
+): void => {
+  if (visited.has(nodeId)) return;
+  visited.add(nodeId);
+
+  // visit every parent first so ancestors run before their descendants
+  edges
+    .filter(edge => edge.target === nodeId)
+    .forEach(edge => visitAncestors(edge.source, nodes, edges, visited, order));
+
+  const node = nodes.find(n => n.id === nodeId);
+  if (node && node.data.type === 'python') {
+    order.push(nodeId);
+  }
+};
+
+export const collectPythonRunOrder = (nodes: Node<NodeData>[], edges: Edge[], targetId: string): string[] => {
+  // python nodes to run to produce targetId's value: its python ancestors, then itself
+  const order: string[] = [];
+  visitAncestors(targetId, nodes, edges, new Set<string>(), order);
+  return order;
+};
+
+export const buildExecutableCode = (nodes: Node<NodeData>[], edges: Edge[], nodeId: string): string => {
+  // prepend the definitions of every python ancestor so upstream dataclasses are in scope
+  return collectPythonRunOrder(nodes, edges, nodeId)
+    .map(id => nodes.find(n => n.id === id)?.data.text ?? '')
+    .join('\n\n\n');
 };
 
 export const createNewNode = (type: NodeType, lastNode: Node<NodeData>, updateNodeData: (id: string, text: string) => void): Node<NodeData> => {
