@@ -1,5 +1,5 @@
 import { Node, Edge } from 'reactflow';
-import { NodeData, NodeType, SourceInputType } from './types';
+import { NodeData, NodeType } from './types';
 import { createDefaultHandles, generateUniqueNodeId, getDefaultDescription, getNodeOutput } from './nodeUtils';
 
 export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], sourceNodeId: string): Node<NodeData>[] => {
@@ -118,7 +118,6 @@ export const createNewNode = (type: NodeType, lastNode: Node<NodeData>, updateNo
       showInputs: false,
       showOutput: false,
       isCollapsed: false,
-      ...(type === 'source' && { sourceType: 'text' as SourceInputType }),
     },
   };
 };

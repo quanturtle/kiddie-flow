@@ -8,7 +8,7 @@ import {
   applyEdgeChanges,
 } from 'reactflow';
 import { create } from 'zustand';
-import { NodeData, NodeType, SourceInputType, RFState } from './types';
+import { NodeData, NodeType, RFState } from './types';
 import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
 import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, shiftDownstream } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
@@ -350,47 +350,6 @@ export const useStore = create<RFState>((set, get) => {
 
       const finalNodes = updateDownstreamNodes(updatedNodes, get().edges, nodeId);
       set({ nodes: finalNodes });
-    },
-
-    updateSourceType: (nodeId: string, sourceType: SourceInputType) => {
-      const nodes = get().nodes.map(node => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              sourceType,
-              text: '',
-              imageUrl: undefined,
-              audioUrl: undefined,
-            },
-          };
-        }
-        return node;
-      });
-
-      const updatedNodes = updateDownstreamNodes(nodes, get().edges, nodeId);
-      set({ nodes: updatedNodes });
-    },
-
-    updateSourceMedia: (nodeId: string, url: string) => {
-      const nodes = get().nodes.map(node => {
-        if (node.id === nodeId) {
-          const mediaType = node.data.sourceType;
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ...(mediaType === 'image' ? { imageUrl: url } : { audioUrl: url }),
-              text: url,
-            },
-          };
-        }
-        return node;
-      });
-
-      const updatedNodes = updateDownstreamNodes(nodes, get().edges, nodeId);
-      set({ nodes: updatedNodes });
     },
 
     removeLastInput: (nodeId: string) => {
