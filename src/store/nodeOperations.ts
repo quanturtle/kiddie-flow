@@ -115,17 +115,6 @@ const bumpDrop = (drops: Map<string, number>, id: string, value: number): boolea
   return false;
 };
 
-const dropWithChildren = (drops: Map<string, number>, edges: Edge[], pivotId: string, id: string, value: number): boolean => {
-  // a displaced node drags its downstream chain by the same amount so its outgoing edges stay level
-  let changed = bumpDrop(drops, id, value);
-  const chain = new Set<string>();
-  collectDownstream(edges, id, chain);
-  chain.forEach(childId => {
-    if (childId !== pivotId && bumpDrop(drops, childId, value)) changed = true;
-  });
-  return changed;
-};
-
 const resolveDrops = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): Map<string, number> => {
   // decide how far each node must drop so the expanded pivot overlaps neither a node nor an edge;
   // drops only ever grow, so iterating to a fixed point settles in a few passes.
@@ -140,7 +129,8 @@ const resolveDrops = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): 
     changed = false;
     guard++;
 
-    // a node the growing (or an already-displaced) box now covers slides down just far enough to clear it
+    // a node the growing (or an already-displaced) box now covers slides down just far enough to
+    // clear it — a node is only ever moved when something actually overlaps it, never dragged along
     for (const node of nodes) {
       if (node.id === pivotId) continue;
       const drop = drops.get(node.id) ?? 0;
@@ -159,10 +149,10 @@ const resolveDrops = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): 
           target = Math.max(target, moverBox.bottom + PUSH_GAP - node.position.y);
         }
       }
-      if (dropWithChildren(drops, edges, pivotId, node.id, target)) changed = true;
+      if (bumpDrop(drops, node.id, target)) changed = true;
     }
 
-    // an edge the growing box now crosses drops its target chain until the edge routes clear
+    // an edge the growing box now crosses drops its target until the edge routes clear
     for (const edge of edges) {
       if (edge.source === pivotId || edge.target === pivotId) continue;
       const source = nodes.find(n => n.id === edge.source);
@@ -174,7 +164,7 @@ const resolveDrops = (nodes: Node<NodeData>[], edges: Edge[], pivotId: string): 
       const by = handleY(targetNode, drops.get(targetNode.id) ?? 0);
       if (segmentHitsBox(ax, ay, bx, by, pivotBox)) {
         const cleared = (drops.get(targetNode.id) ?? 0) + (pivotBox.bottom + PUSH_GAP - by);
-        if (dropWithChildren(drops, edges, pivotId, targetNode.id, cleared)) changed = true;
+        if (bumpDrop(drops, targetNode.id, cleared)) changed = true;
       }
     }
   }
