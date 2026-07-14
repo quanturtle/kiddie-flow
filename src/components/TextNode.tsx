@@ -359,8 +359,6 @@ export function TextNode({ id, data }: NodeProps) {
                   >
                     {data.runError}
                   </pre>
-                ) : isImageValue(data.computedOutput) ? (
-                  <span className="text-xs text-gray-500">✓ image data ready</span>
                 ) : (
                   <pre
                     className="font-mono text-xs bg-gray-900 text-lime-300 border-2 border-black rounded-md px-2 py-1 whitespace-pre-wrap overflow-auto"
@@ -647,10 +645,6 @@ export function TextNode({ id, data }: NodeProps) {
                         </span>
                         {data.runError}
                       </pre>
-                    ) : isImageValue(data.computedOutput) ? (
-                      <div className="text-sm text-gray-600 border-2 border-black rounded-lg p-2 bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                        ✓ produced image data — connect an image node to view it
-                      </div>
                     ) : (
                       <pre
                         className="w-full p-2 border-2 border-black rounded-lg bg-gray-900 text-lime-300 text-xs font-mono whitespace-pre-wrap overflow-auto shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
