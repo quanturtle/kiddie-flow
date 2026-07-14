@@ -9,14 +9,12 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { HelpCircle, Github, FlaskConical } from 'lucide-react';
+import { HelpCircle, Github } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 import { TextNode } from './components/TextNode';
 import { Sidebar } from './components/Sidebar';
 import { AddNodeMenu } from './components/AddNodeMenu';
-import { Labs } from './labs/Labs';
 import { useStore } from './store/flowStore';
 import { CANVAS_BG, CANVAS_DOT } from './theme/nodeTheme';
 
@@ -98,13 +96,6 @@ function Flow() {
 
         {/* Top-right actions */}
         <div className="absolute top-4 right-4 z-10 flex gap-2">
-          <Link
-            to="/labs"
-            className="p-2 bg-white border-2 border-black rounded-lg hover:bg-gray-100 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] inline-flex items-center justify-center"
-            title="Design labs"
-          >
-            <FlaskConical className="w-5 h-5" />
-          </Link>
           <a
             href="https://github.com/quanturtle/kiddie-flow"
             target="_blank"
@@ -122,22 +113,11 @@ function Flow() {
   );
 }
 
-function EditorPage() {
+function App() {
   return (
     <ReactFlowProvider>
       <Flow />
     </ReactFlowProvider>
-  );
-}
-
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<EditorPage />} />
-        <Route path="/labs" element={<Labs />} />
-      </Routes>
-    </BrowserRouter>
   );
 }
 
