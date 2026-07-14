@@ -74,7 +74,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '2',
     type: 'flowNode',
-    position: { x: 720, y: -40 },
+    position: { x: 720, y: 40 },
     data: {
       title: 'sort_dedupe',
       description: 'Returns a sorted tuple of the unique numbers',
@@ -96,7 +96,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '3',
     type: 'flowNode',
-    position: { x: 1440, y: -80 },
+    position: { x: 1440, y: 80 },
     data: {
       title: 'statistics',
       description: 'Packs the numbers into a Stats dataclass',
@@ -118,7 +118,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '4',
     type: 'flowNode',
-    position: { x: 2160, y: -120 },
+    position: { x: 2160, y: 120 },
     data: {
       title: 'report',
       description: 'Unpacks the Stats dataclass into a readable summary',
@@ -140,7 +140,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '5',
     type: 'flowNode',
-    position: { x: 2880, y: -160 },
+    position: { x: 2880, y: 160 },
     data: {
       title: 'Summary',
       description: 'Displays the final report',
@@ -162,7 +162,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '6',
     type: 'flowNode',
-    position: { x: 0, y: 760 },
+    position: { x: 0, y: 1160 },
     data: {
       title: 'cat',
       description: 'Loads and previews cat_example.jpg',
@@ -184,7 +184,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '7',
     type: 'flowNode',
-    position: { x: 760, y: 600 },
+    position: { x: 760, y: 1000 },
     data: {
       title: 'grayscale',
       description: 'Converts the image to grayscale with PIL',
@@ -206,7 +206,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '8',
     type: 'flowNode',
-    position: { x: 760, y: 960 },
+    position: { x: 760, y: 1360 },
     data: {
       title: 'blur',
       description: 'Applies a Gaussian blur with PIL',
@@ -228,7 +228,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '9',
     type: 'flowNode',
-    position: { x: 1700, y: 600 },
+    position: { x: 1700, y: 1000 },
     data: {
       title: 'grayscale result',
       description: 'Displays the grayscale image',
@@ -250,7 +250,7 @@ export const initialNodes: Node<NodeData>[] = [
   {
     id: '10',
     type: 'flowNode',
-    position: { x: 1700, y: 960 },
+    position: { x: 1700, y: 1360 },
     data: {
       title: 'blur result',
       description: 'Displays the blurred image',
