@@ -10,7 +10,7 @@ import {
 import { create } from 'zustand';
 import { NodeData, NodeType, RFState } from './types';
 import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
-import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, applyExpansion, reconcileImageNodes } from './nodeOperations';
+import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, applyExpansion, collectDownstream, reconcileImageNodes } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
 import { runPython } from '../runtime/pythonRuntime';
 
@@ -234,11 +234,16 @@ export const useStore = create<RFState>((set, get) => {
       );
 
       if (willCollapse) {
-        // put every node back where it was before this node expanded
+        // only the pivot's own downstream chain springs back (it moved right to fit the wider
+        // node); nodes displaced to make room stay where they were pushed
         const snapshot = get().preExpandLayout[nodeId];
         if (snapshot) {
+          const children = new Set<string>();
+          collectDownstream(get().edges, nodeId, children);
           nodes = nodes.map(n =>
-            snapshot[n.id] ? { ...n, position: { x: snapshot[n.id].x, y: snapshot[n.id].y } } : n
+            children.has(n.id) && snapshot[n.id]
+              ? { ...n, position: { x: snapshot[n.id].x, y: snapshot[n.id].y } }
+              : n
           );
           const rest = { ...get().preExpandLayout };
           delete rest[nodeId];

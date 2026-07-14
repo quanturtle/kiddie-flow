@@ -43,7 +43,7 @@ export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], so
   return updatedNodes;
 };
 
-const collectDownstream = (edges: Edge[], nodeId: string, acc: Set<string>): void => {
+export const collectDownstream = (edges: Edge[], nodeId: string, acc: Set<string>): void => {
   // walk every edge out of nodeId so the whole downstream chain lands in acc
   edges
     .filter(edge => edge.source === nodeId)
