@@ -34,12 +34,12 @@ const MAX_OUTPUT_CHARS = 60; // keep the terminal preview within the node's stan
 const previewOutput = (value: string): string =>
   value.length > MAX_OUTPUT_CHARS ? `${value.slice(0, MAX_OUTPUT_CHARS)}…` : value;
 
-// thick rounded band concentric with the shadow's corner, wrapping just outside it to signal the node can be dragged larger
+// traces the bottom-right shadow corner — same 16px fillet as the node's rounded-2xl edge — shifted past the shadow to signal the node can be dragged larger
 function ResizeHandle() {
   return (
-    <div className="absolute w-12 h-12 pointer-events-none text-gray-400" style={{ right: -21, bottom: -21 }}>
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round">
-        <path d="M37.6 23.9 A23 23 0 0 1 23.9 37.6" />
+    <div className="absolute w-14 h-14 pointer-events-none text-gray-400" style={{ right: -26, bottom: -26 }}>
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M47 19 L47 31 A16 16 0 0 1 31 47 L19 47" />
       </svg>
     </div>
   );
