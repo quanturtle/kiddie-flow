@@ -29,6 +29,10 @@ interface NodeProps {
 
 const ANIMATION_DURATION = 200;
 const DEBOUNCE_DELAY = 2000; // 2 seconds delay for text updates
+const MAX_OUTPUT_CHARS = 240; // cap the terminal preview so a data URI or long value can't flood it
+
+const previewOutput = (value: string): string =>
+  value.length > MAX_OUTPUT_CHARS ? `${value.slice(0, MAX_OUTPUT_CHARS)}… (${value.length} chars)` : value;
 
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
@@ -364,7 +368,7 @@ export function TextNode({ id, data }: NodeProps) {
                     className="font-mono text-xs bg-gray-900 text-lime-300 border-2 border-black rounded-md px-2 py-1 whitespace-pre-wrap overflow-auto"
                     style={{ maxHeight: 120 }}
                   >
-                    {data.computedOutput}
+                    {previewOutput(data.computedOutput ?? '')}
                   </pre>
                 )}
               </>
@@ -650,7 +654,7 @@ export function TextNode({ id, data }: NodeProps) {
                         className="w-full p-2 border-2 border-black rounded-lg bg-gray-900 text-lime-300 text-xs font-mono whitespace-pre-wrap overflow-auto shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                         style={{ maxHeight: 220, minHeight: 48 }}
                       >
-                        {data.computedOutput || 'Click ▶ Run to execute this node.'}
+                        {data.computedOutput ? previewOutput(data.computedOutput) : 'Click ▶ Run to execute this node.'}
                       </pre>
                     )}
                   </div>
