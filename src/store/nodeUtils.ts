@@ -4,6 +4,8 @@ import { NodeData, HandleConfig, NodeType } from './types';
 // Keep track of the highest ID used so far
 let highestId = 1;
 
+export const isImageValue = (value?: string): boolean => !!value && value.startsWith('data:image');
+
 export const createDefaultHandles = (count: number, prefix: string): HandleConfig[] => {
   return Array.from({ length: count }, (_, i) => ({
     id: `${prefix}${i + 1}`,

@@ -1,6 +1,6 @@
 import { Node, Edge } from 'reactflow';
 import { NodeData, NodeType } from './types';
-import { createDefaultHandles, generateUniqueNodeId, getDefaultDescription, getNodeOutput } from './nodeUtils';
+import { createDefaultHandles, generateUniqueNodeId, getDefaultDescription, getNodeOutput, isImageValue } from './nodeUtils';
 
 export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], sourceNodeId: string): Node<NodeData>[] => {
   const updatedNodes = [...nodes];
@@ -90,6 +90,30 @@ export const buildExecutableCode = (nodes: Node<NodeData>[], edges: Edge[], node
     .join('\n\n\n');
 };
 
+const reconcileImageNode = (node: Node<NodeData>, edges: Edge[]): Node<NodeData> => {
+  // an image node shapes itself to its role: with its own uploaded image and nothing feeding
+  // it, it is a loader that emits downstream (output handle only); otherwise it receives an
+  // image to preview (input handle only, no play button, no upload box).
+  const hasIncoming = edges.some(edge => edge.target === node.id);
+  const isLoader = !hasIncoming && isImageValue(node.data.text);
+  const inputHandles = isLoader ? [] : createDefaultHandles(1, 'input');
+  const outputHandles = isLoader ? createDefaultHandles(1, 'output') : [];
+  return {
+    ...node,
+    data: {
+      ...node.data,
+      inputs: inputHandles.length,
+      outputs: outputHandles.length,
+      inputHandles,
+      outputHandles,
+    },
+  };
+};
+
+export const reconcileImageNodes = (nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] => {
+  return nodes.map(node => (node.data.type === 'image' ? reconcileImageNode(node, edges) : node));
+};
+
 export const createNewNode = (type: NodeType, lastNode: Node<NodeData>, updateNodeData: (id: string, text: string) => void): Node<NodeData> => {
   const id = generateUniqueNodeId([lastNode]);
   
@@ -106,15 +130,17 @@ export const createNewNode = (type: NodeType, lastNode: Node<NodeData>, updateNo
       title: `${type.charAt(0).toUpperCase() + type.slice(1)} ${id}`,
       description: getDefaultDescription(type),
       showDescription: true,
-      text: type === 'result' || type === 'preview' ? '' : `${type} ${id}`,
+      text: type === 'result' || type === 'preview' || type === 'image' ? '' : `${type} ${id}`,
       createdAt: new Date().toISOString(),
       onChange: (text: string) => updateNodeData(id, text),
       type,
-      inputs: type === 'result' || type === 'preview' ? 1 : type === 'source' ? 0 : 1,
-      outputs: type === 'result' ? 0 : 1,
+      // a fresh image node starts empty: it can receive an image (input) or load one; the
+      // output handle only appears once it holds its own image (see reconcileImageNodes).
+      inputs: type === 'source' ? 0 : 1,
+      outputs: type === 'result' || type === 'image' ? 0 : 1,
       inputValues: {},
-      inputHandles: createDefaultHandles(type === 'result' || type === 'preview' ? 1 : type === 'source' ? 0 : 1, 'input'),
-      outputHandles: createDefaultHandles(type === 'result' ? 0 : 1, 'output'),
+      inputHandles: createDefaultHandles(type === 'source' ? 0 : 1, 'input'),
+      outputHandles: createDefaultHandles(type === 'result' || type === 'image' ? 0 : 1, 'output'),
       showInputs: false,
       showOutput: false,
       isCollapsed: false,

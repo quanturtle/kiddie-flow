@@ -3,6 +3,7 @@ import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
 import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, Minus, Loader2, AlertTriangle, Upload, X } from 'lucide-react';
 import CodeEditor from '@uiw/react-textarea-code-editor';
 import { useStore, NodeType } from '../store/flowStore';
+import { isImageValue } from '../store/nodeUtils';
 import { nodeStyles, HARD_SHADOW, SOFT_SHADOW, ACCENT } from '../theme/nodeTheme';
 
 interface NodeProps {
@@ -29,14 +30,13 @@ interface NodeProps {
 const ANIMATION_DURATION = 200;
 const DEBOUNCE_DELAY = 2000; // 2 seconds delay for text updates
 
-const isImageValue = (value?: string): boolean => !!value && value.startsWith('data:image');
-
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
   const updateNodeConfig = useStore(state => state.updateNodeConfig);
   const removeLastInput = useStore(state => state.removeLastInput);
   const runPythonNode = useStore(state => state.runPythonNode);
   const toggleCollapseNode = useStore(state => state.toggleCollapse);
+  const hasIncomingEdge = useStore(state => state.edges.some(edge => edge.target === id));
   const nodeRef = useRef<HTMLDivElement>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState(false);
@@ -256,10 +256,10 @@ export function TextNode({ id, data }: NodeProps) {
     return line ? line.trim().replace(/:\s*$/, '') : '';
   }, [data.text]);
 
-  // an image node with an input previews that input; a loader (no inputs) previews its own image
-  const imageSource = data.inputHandles.length > 0
-    ? data.inputValues[data.inputHandles[0]?.id ?? ''] ?? ''
-    : data.text;
+  // an image node adapts to its role: while an edge feeds it, it previews that incoming image;
+  // otherwise, holding its own uploaded image makes it a loader that emits downstream.
+  const incomingImage = data.inputValues[data.inputHandles[0]?.id ?? ''] ?? '';
+  const isImageLoader = !hasIncomingEdge && isImageValue(data.text);
 
   const style = nodeStyles[data.type];
   const Icon = style.icon;
@@ -325,7 +325,7 @@ export function TextNode({ id, data }: NodeProps) {
                 >
                   {data.isCollapsed ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
-                {!['result', 'source', 'preview'].includes(data.type) && (
+                {!['result', 'source', 'preview', 'image'].includes(data.type) && (
                   <button
                     onClick={data.type === 'python' ? handleRun : handlePlay}
                     disabled={data.isRunning}
@@ -381,7 +381,7 @@ export function TextNode({ id, data }: NodeProps) {
                 <div className="w-full">
                   <div className="text-xs font-bold mb-2 uppercase text-gray-600 flex items-center justify-between">
                     <span>Image</span>
-                    {data.inputHandles.length === 0 && isImageValue(imageSource) && (
+                    {isImageLoader && (
                       <button
                         onClick={handleClearImage}
                         className="flex items-center gap-1 text-[10px] normal-case font-semibold px-1.5 py-0.5 bg-white border-2 border-black rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100"
@@ -391,16 +391,24 @@ export function TextNode({ id, data }: NodeProps) {
                       </button>
                     )}
                   </div>
-                  {isImageValue(imageSource) ? (
+                  {hasIncomingEdge ? (
+                    isImageValue(incomingImage) ? (
+                      <img
+                        src={incomingImage}
+                        alt="image"
+                        className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      />
+                    ) : (
+                      <div className="text-sm text-gray-500 p-4 border-2 border-dashed border-gray-400 rounded-lg text-center">
+                        Waiting for image…
+                      </div>
+                    )
+                  ) : isImageLoader ? (
                     <img
-                      src={imageSource}
+                      src={data.text}
                       alt="image"
                       className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     />
-                  ) : data.inputHandles.length > 0 ? (
-                    <div className="text-sm text-gray-500 p-4 border-2 border-dashed border-gray-400 rounded-lg text-center">
-                      Waiting for image…
-                    </div>
                   ) : (
                     <label className="nodrag flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-black rounded-lg cursor-pointer hover:bg-gray-50 text-gray-600">
                       <Upload className="w-6 h-6" />

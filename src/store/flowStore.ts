@@ -10,7 +10,7 @@ import {
 import { create } from 'zustand';
 import { NodeData, NodeType, RFState } from './types';
 import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
-import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, shiftDownstream } from './nodeOperations';
+import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, shiftDownstream, reconcileImageNodes } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
 import { runPython } from '../runtime/pythonRuntime';
 
@@ -81,7 +81,7 @@ export const useStore = create<RFState>((set, get) => {
 
       set({
         edges: newEdges,
-        nodes: updatedNodes,
+        nodes: reconcileImageNodes(updatedNodes, newEdges),
       });
     },
 
@@ -125,7 +125,7 @@ export const useStore = create<RFState>((set, get) => {
 
         set({
           edges: newEdges,
-          nodes: updatedNodes,
+          nodes: reconcileImageNodes(updatedNodes, newEdges),
         });
       }
     },
@@ -135,7 +135,8 @@ export const useStore = create<RFState>((set, get) => {
         node.id === nodeId ? { ...node, data: { ...node.data, text } } : node
       );
 
-      const updatedNodes = updateDownstreamNodes(nodes, get().edges, nodeId);
+      // an uploaded image (or a cleared one) flips the node between loader and receiver
+      const updatedNodes = reconcileImageNodes(updateDownstreamNodes(nodes, get().edges, nodeId), get().edges);
       set({ nodes: updatedNodes });
     },
 
