@@ -68,6 +68,81 @@ export const shiftDownstream = (nodes: Node<NodeData>[], edges: Edge[], pivotId:
   );
 };
 
+const DEFAULT_NODE_WIDTH = 300;
+const DEFAULT_NODE_HEIGHT = 150;
+
+const horizontallyOverlap = (a: Node<NodeData>, b: Node<NodeData>): boolean => {
+  const aWidth = a.width ?? DEFAULT_NODE_WIDTH;
+  const bWidth = b.width ?? DEFAULT_NODE_WIDTH;
+  return a.position.x < b.position.x + bWidth && b.position.x < a.position.x + aWidth;
+};
+
+const collectBelowOverlap = (nodes: Node<NodeData>[], pivotId: string, dH: number): Set<string> => {
+  // flood down from the pivot: a node whose top sits inside a mover's vertical span and shares its
+  // column must drop too, so the pivot's downward growth never lands on top of another node.
+  const pivot = nodes.find(n => n.id === pivotId);
+  const push = new Set<string>();
+  if (!pivot) return push;
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const candidate of nodes) {
+      if (candidate.id === pivotId || push.has(candidate.id)) continue;
+      const top = candidate.position.y;
+
+      // overlapped from above by the taller pivot itself
+      const underPivot =
+        horizontallyOverlap(pivot, candidate) &&
+        top > pivot.position.y &&
+        top < pivot.position.y + (pivot.height ?? DEFAULT_NODE_HEIGHT);
+
+      // or overlapped by an already-pushed node once it has dropped by dH
+      let underPushed = false;
+      if (!underPivot) {
+        for (const id of push) {
+          const mover = nodes.find(n => n.id === id);
+          if (!mover) continue;
+          if (
+            horizontallyOverlap(mover, candidate) &&
+            top > mover.position.y &&
+            top < mover.position.y + (mover.height ?? DEFAULT_NODE_HEIGHT) + dH
+          ) {
+            underPushed = true;
+            break;
+          }
+        }
+      }
+
+      if (underPivot || underPushed) {
+        push.add(candidate.id);
+        changed = true;
+      }
+    }
+  }
+  return push;
+};
+
+export const applyExpansion = (
+  nodes: Node<NodeData>[],
+  edges: Edge[],
+  pivotId: string,
+  dW: number,
+  dH: number
+): Node<NodeData>[] => {
+  // grow-right: slide the pivot's downstream chain right so those edges keep their length
+  const widened = shiftDownstream(nodes, edges, pivotId, dW);
+  if (dH <= 0) return widened;
+
+  // grow-down: drop the nodes the taller pivot now overlaps (and their column) by the same dH
+  const pushDown = collectBelowOverlap(widened, pivotId, dH);
+  return widened.map(n =>
+    pushDown.has(n.id)
+      ? { ...n, position: { x: n.position.x, y: n.position.y + dH } }
+      : n
+  );
+};
+
 const visitAncestors = (
   nodeId: string,
   nodes: Node<NodeData>[],

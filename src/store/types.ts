@@ -39,8 +39,8 @@ export type RFState = {
   nodes: Node<NodeData>[];
   edges: Edge[];
   selectedNode: string | null;
-  pendingExpand: { id: string; baseWidth: number } | null;
-  expandShifts: Record<string, number>;
+  pendingExpand: { id: string; baseWidth: number; baseHeight: number } | null;
+  preExpandLayout: Record<string, Record<string, { x: number; y: number }>>;
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;

@@ -10,7 +10,7 @@ import {
 import { create } from 'zustand';
 import { NodeData, NodeType, RFState } from './types';
 import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
-import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, shiftDownstream, reconcileImageNodes } from './nodeOperations';
+import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, applyExpansion, reconcileImageNodes } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
 import { runPython } from '../runtime/pythonRuntime';
 
@@ -23,24 +23,26 @@ export const useStore = create<RFState>((set, get) => {
     edges: initialEdges,
     selectedNode: null,
     pendingExpand: null,
-    expandShifts: {},
+    preExpandLayout: {},
 
     onNodesChange: (changes: NodeChange[]) => {
       const updated = applyNodeChanges(changes, get().nodes);
       const pending = get().pendingExpand;
 
-      // as the just-expanded node grows, slide everything to its right to keep pace
+      // while a node expands, rebuild the layout from the pre-expand snapshot so growth is
+      // idempotent: the pivot's top-left stays put while its downstream slides right and the
+      // nodes it now overlaps slide down.
       const resized = pending !== null && changes.some(c => c.type === 'dimensions' && c.id === pending.id);
       if (pending !== null && resized) {
+        const snapshot = get().preExpandLayout[pending.id];
         const node = updated.find(n => n.id === pending.id);
-        const desired = Math.max(0, (node?.width ?? pending.baseWidth) - pending.baseWidth);
-        const applied = get().expandShifts[pending.id] ?? 0;
-        const diff = desired - applied;
-        if (diff !== 0) {
-          set({
-            nodes: shiftDownstream(updated, get().edges, pending.id, diff),
-            expandShifts: { ...get().expandShifts, [pending.id]: desired },
-          });
+        if (snapshot && node) {
+          const dW = Math.max(0, (node.width ?? pending.baseWidth) - pending.baseWidth);
+          const dH = Math.max(0, (node.height ?? pending.baseHeight) - pending.baseHeight);
+          const reset = updated.map(n =>
+            snapshot[n.id] ? { ...n, position: { x: snapshot[n.id].x, y: snapshot[n.id].y } } : n
+          );
+          set({ nodes: applyExpansion(reset, get().edges, pending.id, dW, dH) });
           return;
         }
       }
@@ -232,21 +234,32 @@ export const useStore = create<RFState>((set, get) => {
       );
 
       if (willCollapse) {
-        // slide the right-hand nodes back to where they were before this node expanded
-        const shift = get().expandShifts[nodeId];
-        if (shift) {
-          nodes = shiftDownstream(nodes, get().edges, nodeId, -shift);
-          const rest = { ...get().expandShifts };
+        // put every node back where it was before this node expanded
+        const snapshot = get().preExpandLayout[nodeId];
+        if (snapshot) {
+          nodes = nodes.map(n =>
+            snapshot[n.id] ? { ...n, position: { x: snapshot[n.id].x, y: snapshot[n.id].y } } : n
+          );
+          const rest = { ...get().preExpandLayout };
           delete rest[nodeId];
-          set({ nodes, expandShifts: rest, pendingExpand: null });
+          set({ nodes, preExpandLayout: rest, pendingExpand: null });
           return;
         }
         set({ nodes });
         return;
       }
 
-      // expanding: remember the collapsed width; the resize handler pushes once measured
-      set({ nodes, pendingExpand: { id: nodeId, baseWidth: node.width ?? 440 } });
+      // expanding: snapshot every position so collapse can restore it, remember the collapsed
+      // size, and let the resize handler push neighbours once the new size is measured
+      const snapshot: Record<string, { x: number; y: number }> = {};
+      get().nodes.forEach(n => {
+        snapshot[n.id] = { x: n.position.x, y: n.position.y };
+      });
+      set({
+        nodes,
+        preExpandLayout: { ...get().preExpandLayout, [nodeId]: snapshot },
+        pendingExpand: { id: nodeId, baseWidth: node.width ?? 440, baseHeight: node.height ?? 120 },
+      });
       setTimeout(() => {
         const pending = get().pendingExpand;
         if (pending && pending.id === nodeId) set({ pendingExpand: null });

@@ -269,10 +269,8 @@ export function TextNode({ id, data }: NodeProps) {
       ref={nodeRef}
       className={`rounded-2xl border-4 border-black relative ${HARD_SHADOW} ${style.bg}`}
       style={{
-        // anchor at the left edge so expanding grows the node to the right, keeping the
-        // input handle (and the incoming edge) fixed in place
-        transform: 'translate(0, -50%)',
-        // constant padding so the left handle never shifts when the node expands
+        // anchor at the top-left so expanding grows the node down and to the right; the handles
+        // ride along to their new positions as the box changes size
         padding: '16px',
         minHeight: data.isCollapsed ? '48px' : 'auto',
         width: '100%',
