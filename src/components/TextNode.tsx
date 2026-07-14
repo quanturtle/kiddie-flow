@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
+import { Handle, Position, useReactFlow, useUpdateNodeInternals } from 'reactflow';
 import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, Minus, Loader2, AlertTriangle, Upload, X } from 'lucide-react';
 import CodeEditor from '@uiw/react-textarea-code-editor';
 import { useStore, NodeType } from '../store/flowStore';
@@ -24,7 +24,15 @@ interface NodeProps {
     showInputs?: boolean;
     showOutput?: boolean;
     isCollapsed?: boolean;
+    width?: number;
+    height?: number;
   };
+}
+
+interface ResizeHandleProps {
+  onPointerDown: (e: React.PointerEvent) => void;
+  onPointerMove: (e: React.PointerEvent) => void;
+  onPointerUp: (e: React.PointerEvent) => void;
 }
 
 const ANIMATION_DURATION = 200;
@@ -34,11 +42,17 @@ const MAX_OUTPUT_CHARS = 60; // keep the terminal preview within the node's stan
 const previewOutput = (value: string): string =>
   value.length > MAX_OUTPUT_CHARS ? `${value.slice(0, MAX_OUTPUT_CHARS)}…` : value;
 
-// traces the bottom-right shadow corner — same 16px fillet as the node's rounded-2xl edge — shifted past the shadow to signal the node can be dragged larger
-function ResizeHandle() {
+// traces the bottom-right shadow corner — same 16px fillet as the node's rounded-2xl edge — shifted past the shadow; dragging it resizes the node
+function ResizeHandle({ onPointerDown, onPointerMove, onPointerUp }: ResizeHandleProps) {
   return (
-    <div className="absolute w-14 h-14 pointer-events-none text-gray-400" style={{ right: -26, bottom: -26 }}>
-      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
+    <div
+      className="nodrag absolute w-14 h-14 text-gray-400"
+      style={{ right: -26, bottom: -26, cursor: 'nwse-resize', touchAction: 'none' }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      <svg className="pointer-events-none" width="56" height="56" viewBox="0 0 56 56" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M47 19 L47 31 A16 16 0 0 1 31 47 L19 47" />
       </svg>
     </div>
@@ -48,11 +62,17 @@ function ResizeHandle() {
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
   const updateNodeConfig = useStore(state => state.updateNodeConfig);
+  const resizeNode = useStore(state => state.resizeNode);
   const removeLastInput = useStore(state => state.removeLastInput);
   const runPythonNode = useStore(state => state.runPythonNode);
   const toggleCollapseNode = useStore(state => state.toggleCollapse);
   const hasIncomingEdge = useStore(state => state.edges.some(edge => edge.target === id));
+  const measuredWidth = useStore(state => state.nodes.find(n => n.id === id)?.width);
+  const measuredHeight = useStore(state => state.nodes.find(n => n.id === id)?.height);
+  const { getZoom } = useReactFlow();
   const nodeRef = useRef<HTMLDivElement>(null);
+  const resizeStart = useRef<{ x: number; y: number; zoom: number; w: number; h: number } | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState(false);
   const transitionTimeoutRef = useRef<NodeJS.Timeout>();
@@ -204,6 +224,36 @@ export function TextNode({ id, data }: NodeProps) {
     toggleCollapseNode(id);
   };
 
+  const minWidth = data.type === 'python' ? 800 : 340;
+  const minHeight = data.type === 'python' ? 460 : 200;
+
+  const handleResizeStart = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsResizing(true);
+    resizeStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      zoom: getZoom(),
+      w: data.width ?? measuredWidth ?? minWidth,
+      h: data.height ?? measuredHeight ?? minHeight,
+    };
+  };
+
+  const handleResizeMove = (e: React.PointerEvent) => {
+    const start = resizeStart.current;
+    if (!start) return;
+    const width = Math.max(minWidth, Math.round(start.w + (e.clientX - start.x) / start.zoom));
+    const height = Math.max(minHeight, Math.round(start.h + (e.clientY - start.y) / start.zoom));
+    resizeNode(id, width, height);
+  };
+
+  const handleResizeEnd = (e: React.PointerEvent) => {
+    resizeStart.current = null;
+    setIsResizing(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
   const addInput = () => {
     if (data.inputs < 5) {
       updateNodeConfig(id, { 
@@ -284,17 +334,19 @@ export function TextNode({ id, data }: NodeProps) {
   return (
     <div
       ref={nodeRef}
-      className={`rounded-2xl border-4 border-black relative ${HARD_SHADOW} ${style.bg}`}
+      className={`rounded-2xl border-4 border-black relative flex flex-col ${HARD_SHADOW} ${style.bg}`}
       style={{
         // anchor at the top-left so expanding grows the node down and to the right; the handles
         // ride along to their new positions as the box changes size
         padding: '16px',
         minHeight: data.isCollapsed ? '48px' : 'auto',
-        width: '100%',
-        transition: `all ${ANIMATION_DURATION}ms ease-in-out`,
+        // an explicit size takes over once the user drags the corner; otherwise the box sizes to content
+        width: data.width ?? '100%',
+        height: data.height,
+        transition: isResizing ? 'none' : `all ${ANIMATION_DURATION}ms ease-in-out`,
       }}
     >
-      <div className="flex gap-6 relative">
+      <div className="flex gap-6 relative flex-1 min-h-0">
         <div
           className="absolute left-0 h-full flex flex-col justify-center"
           style={{
@@ -318,8 +370,8 @@ export function TextNode({ id, data }: NodeProps) {
           ))}
         </div>
 
-        <div className={`w-full ${data.type === 'python' ? (data.isCollapsed ? 'min-w-[440px]' : 'min-w-[760px]') : 'min-w-[300px]'}`} style={{ transition: `width ${ANIMATION_DURATION}ms ease-in-out` }}>
-          <div className={`flex flex-col gap-2 ${!data.isCollapsed ? '-mx-4 -mt-4 px-4 pt-4 pb-3 mb-4 border-b-4 border-black' : ''}`}>
+        <div className={`w-full flex flex-col min-h-0 ${data.type === 'python' ? (data.isCollapsed ? 'min-w-[440px]' : 'min-w-[760px]') : 'min-w-[300px]'}`} style={{ transition: isResizing ? 'none' : `width ${ANIMATION_DURATION}ms ease-in-out` }}>
+          <div className={`shrink-0 flex flex-col gap-2 ${!data.isCollapsed ? '-mx-4 -mt-4 px-4 pt-4 pb-3 mb-4 border-b-4 border-black' : ''}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <span className="w-9 h-9 flex items-center justify-center bg-white text-black border-2 border-black rounded-xl shrink-0">
@@ -389,10 +441,10 @@ export function TextNode({ id, data }: NodeProps) {
           </div>
 
           {!data.isCollapsed && (
-            <>
+            <div className="flex-1 min-h-0 flex flex-col">
               {data.type === 'image' ? (
-                <div className="w-full">
-                  <div className="text-xs font-bold mb-2 uppercase text-gray-600 flex items-center justify-between">
+                <div className="w-full flex-1 min-h-0 flex flex-col">
+                  <div className="shrink-0 text-xs font-bold mb-2 uppercase text-gray-600 flex items-center justify-between">
                     <span>Image</span>
                     {isImageLoader && (
                       <button
@@ -409,7 +461,7 @@ export function TextNode({ id, data }: NodeProps) {
                       <img
                         src={incomingImage}
                         alt="image"
-                        className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                        className="w-full flex-1 min-h-0 object-contain rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                       />
                     ) : (
                       <div className="text-sm text-gray-500 p-4 border-2 border-dashed border-gray-400 rounded-lg text-center">
@@ -420,7 +472,7 @@ export function TextNode({ id, data }: NodeProps) {
                     <img
                       src={data.text}
                       alt="image"
-                      className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      className="w-full flex-1 min-h-0 object-contain rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     />
                   ) : (
                     <label className="nodrag flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-black rounded-lg cursor-pointer hover:bg-gray-50 text-gray-600">
@@ -431,67 +483,67 @@ export function TextNode({ id, data }: NodeProps) {
                   )}
                 </div>
               ) : data.type === 'preview' ? (
-                <div className="w-full">
-                  <div className="text-xs font-bold mb-2 uppercase text-gray-600">Preview</div>
+                <div className="w-full flex-1 min-h-0 flex flex-col">
+                  <div className="shrink-0 text-xs font-bold mb-2 uppercase text-gray-600">Preview</div>
                   {isImageValue(data.text) ? (
                     <img
                       src={data.text}
                       alt="preview"
-                      className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      className="w-full flex-1 min-h-0 object-contain rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     />
                   ) : (
                     <textarea
                       value={data.text}
                       readOnly
-                      className="w-full p-2 border-2 border-black rounded-lg bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
+                      className="w-full flex-1 min-h-0 p-2 border-2 border-black rounded-lg bg-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
                       rows={8}
                       placeholder="Connected input will appear here..."
                     />
                   )}
                 </div>
               ) : data.type === 'result' ? (
-                <div className="w-full">
-                  <div className="text-xs font-bold mb-2 uppercase text-gray-400">Result</div>
+                <div className="w-full flex-1 min-h-0 flex flex-col">
+                  <div className="shrink-0 text-xs font-bold mb-2 uppercase text-gray-400">Result</div>
                   {isImageValue(data.text) ? (
                     <img
                       src={data.text}
                       alt="result"
-                      className="w-full rounded-lg border-2 border-gray-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      className="w-full flex-1 min-h-0 object-contain rounded-lg border-2 border-gray-700 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     />
                   ) : (
                     <textarea
                       value={data.text}
                       readOnly
-                      className="w-full p-2 border-2 border-gray-700 rounded-lg bg-gray-900 text-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
+                      className="w-full flex-1 min-h-0 p-2 border-2 border-gray-700 rounded-lg bg-gray-900 text-white text-sm shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] resize-none"
                       rows={8}
                       placeholder="Connected input will appear here..."
                     />
                   )}
                 </div>
               ) : data.type === 'source' ? (
-                <div className="w-full">
-                  <div className="text-xs font-bold mb-2 uppercase text-gray-600">
+                <div className="w-full flex-1 min-h-0 flex flex-col">
+                  <div className="shrink-0 text-xs font-bold mb-2 uppercase text-gray-600">
                     {isImageValue(localText) ? 'Source Image' : 'Source Text'}
                   </div>
                   {isImageValue(localText) ? (
                     <img
                       src={localText}
                       alt="source"
-                      className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      className="w-full flex-1 min-h-0 object-contain rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     />
                   ) : (
                     <textarea
                       value={localText}
                       onChange={handleChange}
-                      className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                      className="w-full flex-1 min-h-0 p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                       rows={8}
                       placeholder="Enter your source text here..."
                     />
                   )}
                 </div>
               ) : (
-                <>
-                <div className="flex w-full gap-4">
+                <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex w-full gap-4 flex-1 min-h-0">
                   {!['result', 'source', 'preview'].includes(data.type) && (
                     <>
                       {!data.showInputs ? (
@@ -572,14 +624,14 @@ export function TextNode({ id, data }: NodeProps) {
                         </div>
                       )}
 
-                      <div className="flex-1">
-                        <div className="text-xs font-bold mb-2 uppercase text-gray-600">
+                      <div className="flex-1 min-h-0 flex flex-col">
+                        <div className="shrink-0 text-xs font-bold mb-2 uppercase text-gray-600">
                           {data.type === 'python' ? 'Python' : 'Transform'}
                         </div>
                         {data.type === 'python' ? (
                           <div
-                            className="nodrag border-2 border-black rounded-lg overflow-auto bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                            style={{ height: 340 }}
+                            className="nodrag flex-1 min-h-0 border-2 border-black rounded-lg overflow-auto bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            style={{ minHeight: 340 }}
                           >
                             <CodeEditor
                               value={localText}
@@ -600,7 +652,7 @@ export function TextNode({ id, data }: NodeProps) {
                           <textarea
                             value={localText}
                             onChange={handleChange}
-                            className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            className="w-full flex-1 min-h-0 p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                             rows={8}
                             placeholder="Enter your transform text here... Use {input_1} to reference inputs"
                           />
@@ -618,8 +670,8 @@ export function TextNode({ id, data }: NodeProps) {
                           </button>
                         </div>
                       ) : (
-                        <div className="w-1/3 border-l-2 border-black pl-4">
-                          <div className="flex items-center justify-between mb-1">
+                        <div className="w-1/3 border-l-2 border-black pl-4 flex flex-col min-h-0">
+                          <div className="shrink-0 flex items-center justify-between mb-1">
                             <div className="text-xs font-bold uppercase text-gray-600">Output</div>
                             <button
                               onClick={toggleOutput}
@@ -632,7 +684,7 @@ export function TextNode({ id, data }: NodeProps) {
                           <textarea
                             value={processedText}
                             readOnly
-                            className="w-full p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                            className="w-full flex-1 min-h-0 p-2 border-2 border-black rounded-lg resize-none focus:outline-none bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                             rows={8}
                             placeholder="Transformed text will appear here..."
                           />
@@ -643,7 +695,7 @@ export function TextNode({ id, data }: NodeProps) {
                 </div>
 
                 {data.type === 'python' && (
-                  <div className="mt-4">
+                  <div className="mt-4 shrink-0">
                     <div className="text-xs font-bold mb-2 uppercase text-gray-600 flex items-center gap-2">
                       Output
                       {data.isRunning && (
@@ -672,9 +724,9 @@ export function TextNode({ id, data }: NodeProps) {
                     )}
                   </div>
                 )}
-                </>
+                </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
@@ -702,7 +754,13 @@ export function TextNode({ id, data }: NodeProps) {
         </div>
       </div>
 
-      {!data.isCollapsed && showsImage && <ResizeHandle />}
+      {!data.isCollapsed && showsImage && (
+        <ResizeHandle
+          onPointerDown={handleResizeStart}
+          onPointerMove={handleResizeMove}
+          onPointerUp={handleResizeEnd}
+        />
+      )}
     </div>
   );
 }

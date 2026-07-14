@@ -242,6 +242,16 @@ export const useStore = create<RFState>((set, get) => {
       }
     },
 
+    resizeNode: (nodeId: string, width: number, height: number) => {
+      set({
+        nodes: get().nodes.map(node =>
+          node.id === nodeId
+            ? { ...node, data: { ...node.data, width, height } }
+            : node
+        ),
+      });
+    },
+
     toggleCollapse: (nodeId: string) => {
       const node = get().nodes.find(n => n.id === nodeId);
       if (!node) return;

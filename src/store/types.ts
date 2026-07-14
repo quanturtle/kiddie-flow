@@ -29,6 +29,9 @@ export type NodeData = {
   showInputs?: boolean;
   showOutput?: boolean;
   isCollapsed?: boolean;
+  // explicit box size once the user has dragged the resize corner; unset means size-to-content
+  width?: number;
+  height?: number;
   // execution state for runnable nodes (python)
   computedOutput?: string;
   isRunning?: boolean;
@@ -47,6 +50,7 @@ export type RFState = {
   updateNodeData: (nodeId: string, text: string) => void;
   setSelectedNode: (nodeId: string | null) => void;
   updateNodeConfig: (nodeId: string, config: Partial<NodeData>) => void;
+  resizeNode: (nodeId: string, width: number, height: number) => void;
   toggleCollapse: (nodeId: string) => void;
   addNode: (type: NodeType) => void;
   updateInputValue: (nodeId: string, inputId: string, value: string) => void;
