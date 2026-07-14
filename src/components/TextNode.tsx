@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Handle, Position, useUpdateNodeInternals } from 'reactflow';
-import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, Minus, Loader2, AlertTriangle } from 'lucide-react';
+import { Play, ChevronLeft, ChevronRight, Plus, Eye, EyeOff, Minus, Loader2, AlertTriangle, Upload, X } from 'lucide-react';
 import CodeEditor from '@uiw/react-textarea-code-editor';
 import { useStore, NodeType } from '../store/flowStore';
 import { nodeStyles, HARD_SHADOW, SOFT_SHADOW, ACCENT } from '../theme/nodeTheme';
@@ -160,6 +160,20 @@ export function TextNode({ id, data }: NodeProps) {
     runPythonNode(id);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') data.onChange(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearImage = () => {
+    data.onChange('');
+  };
+
   const toggleInputs = () => {
     startTransition();
     updateNodeConfig(id, { showInputs: !data.showInputs });
@@ -241,6 +255,11 @@ export function TextNode({ id, data }: NodeProps) {
     const line = data.text.split('\n').find(l => l.trim().startsWith('def '));
     return line ? line.trim().replace(/:\s*$/, '') : '';
   }, [data.text]);
+
+  // an image node with an input previews that input; a loader (no inputs) previews its own image
+  const imageSource = data.inputHandles.length > 0
+    ? data.inputValues[data.inputHandles[0]?.id ?? ''] ?? ''
+    : data.text;
 
   const style = nodeStyles[data.type];
   const Icon = style.icon;
@@ -329,10 +348,6 @@ export function TextNode({ id, data }: NodeProps) {
               </code>
             )}
 
-            {data.type === 'image' && data.isCollapsed && isImageValue(data.text) && (
-              <img src={data.text} alt="image" className="w-40 rounded-md border-2 border-black" />
-            )}
-
             {data.type === 'python' && data.isCollapsed && (data.isRunning || data.computedOutput || data.runError) && (
               <>
                 {data.isRunning ? (
@@ -347,11 +362,7 @@ export function TextNode({ id, data }: NodeProps) {
                     {data.runError}
                   </pre>
                 ) : isImageValue(data.computedOutput) ? (
-                  <img
-                    src={data.computedOutput}
-                    alt="output"
-                    className="w-full rounded-md border-2 border-black"
-                  />
+                  <span className="text-xs text-gray-500">✓ image data ready</span>
                 ) : (
                   <pre
                     className="font-mono text-xs bg-gray-900 text-lime-300 border-2 border-black rounded-md px-2 py-1 whitespace-pre-wrap overflow-auto"
@@ -368,17 +379,34 @@ export function TextNode({ id, data }: NodeProps) {
             <>
               {data.type === 'image' ? (
                 <div className="w-full">
-                  <div className="text-xs font-bold mb-2 uppercase text-gray-600">Image</div>
-                  {isImageValue(data.text) ? (
+                  <div className="text-xs font-bold mb-2 uppercase text-gray-600 flex items-center justify-between">
+                    <span>Image</span>
+                    {data.inputHandles.length === 0 && isImageValue(imageSource) && (
+                      <button
+                        onClick={handleClearImage}
+                        className="flex items-center gap-1 text-[10px] normal-case font-semibold px-1.5 py-0.5 bg-white border-2 border-black rounded shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:bg-gray-100"
+                        title="Clear image"
+                      >
+                        <X className="w-3 h-3" /> Clear
+                      </button>
+                    )}
+                  </div>
+                  {isImageValue(imageSource) ? (
                     <img
-                      src={data.text}
+                      src={imageSource}
                       alt="image"
                       className="w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
                     />
-                  ) : (
-                    <div className="text-sm text-gray-500 p-3 border-2 border-dashed border-gray-400 rounded-lg text-center">
-                      No image loaded
+                  ) : data.inputHandles.length > 0 ? (
+                    <div className="text-sm text-gray-500 p-4 border-2 border-dashed border-gray-400 rounded-lg text-center">
+                      Waiting for image…
                     </div>
+                  ) : (
+                    <label className="nodrag flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-black rounded-lg cursor-pointer hover:bg-gray-50 text-gray-600">
+                      <Upload className="w-6 h-6" />
+                      <span className="text-sm font-semibold">Choose an image</span>
+                      <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    </label>
                   )}
                 </div>
               ) : data.type === 'preview' ? (
@@ -614,11 +642,9 @@ export function TextNode({ id, data }: NodeProps) {
                         {data.runError}
                       </pre>
                     ) : isImageValue(data.computedOutput) ? (
-                      <img
-                        src={data.computedOutput}
-                        alt="output"
-                        className="max-w-full rounded-lg border-2 border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                      />
+                      <div className="text-sm text-gray-600 border-2 border-black rounded-lg p-2 bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
+                        ✓ produced image data — connect an image node to view it
+                      </div>
                     ) : (
                       <pre
                         className="w-full p-2 border-2 border-black rounded-lg bg-gray-900 text-lime-300 text-xs font-mono whitespace-pre-wrap overflow-auto shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
