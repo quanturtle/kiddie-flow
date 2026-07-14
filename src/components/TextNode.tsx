@@ -29,10 +29,10 @@ interface NodeProps {
 
 const ANIMATION_DURATION = 200;
 const DEBOUNCE_DELAY = 2000; // 2 seconds delay for text updates
-const MAX_OUTPUT_CHARS = 240; // cap the terminal preview so a data URI or long value can't flood it
+const MAX_OUTPUT_CHARS = 60; // keep the terminal preview within the node's standard width
 
 const previewOutput = (value: string): string =>
-  value.length > MAX_OUTPUT_CHARS ? `${value.slice(0, MAX_OUTPUT_CHARS)}… (${value.length} chars)` : value;
+  value.length > MAX_OUTPUT_CHARS ? `${value.slice(0, MAX_OUTPUT_CHARS)}…` : value;
 
 export function TextNode({ id, data }: NodeProps) {
   const updateNodeInternals = useUpdateNodeInternals();
