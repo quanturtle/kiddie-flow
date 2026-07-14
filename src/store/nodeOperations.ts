@@ -77,50 +77,42 @@ const horizontallyOverlap = (a: Node<NodeData>, b: Node<NodeData>): boolean => {
   return a.position.x < b.position.x + bWidth && b.position.x < a.position.x + aWidth;
 };
 
-const collectBelowOverlap = (nodes: Node<NodeData>[], pivotId: string, dH: number): Set<string> => {
-  // flood down from the pivot: a node whose top sits inside a mover's vertical span and shares its
-  // column must drop too, so the pivot's downward growth never lands on top of another node.
+const PUSH_GAP = 32; // breathing room left below the expanded node
+
+const nodeBottom = (node: Node<NodeData>, dy: number): number =>
+  node.position.y + dy + (node.height ?? DEFAULT_NODE_HEIGHT);
+
+const resolvePushDown = (nodes: Node<NodeData>[], pivotId: string): Map<string, number> => {
+  // give each node in the pivot's downward path the minimum drop that clears the box above it:
+  // just past the taller pivot (or an already-displaced node), plus a small gap — no more.
   const pivot = nodes.find(n => n.id === pivotId);
-  const push = new Set<string>();
-  if (!pivot) return push;
+  const drops = new Map<string, number>();
+  if (!pivot) return drops;
 
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const candidate of nodes) {
-      if (candidate.id === pivotId || push.has(candidate.id)) continue;
-      const top = candidate.position.y;
+  // sweep top-to-bottom so a node sees the resolved positions of the movers above it
+  const ordered = [...nodes]
+    .filter(n => n.id !== pivotId)
+    .sort((a, b) => a.position.y - b.position.y);
 
-      // overlapped from above by the taller pivot itself
-      const underPivot =
-        horizontallyOverlap(pivot, candidate) &&
-        top > pivot.position.y &&
-        top < pivot.position.y + (pivot.height ?? DEFAULT_NODE_HEIGHT);
+  for (const node of ordered) {
+    const top = node.position.y;
+    let drop = 0;
 
-      // or overlapped by an already-pushed node once it has dropped by dH
-      let underPushed = false;
-      if (!underPivot) {
-        for (const id of push) {
-          const mover = nodes.find(n => n.id === id);
-          if (!mover) continue;
-          if (
-            horizontallyOverlap(mover, candidate) &&
-            top > mover.position.y &&
-            top < mover.position.y + (mover.height ?? DEFAULT_NODE_HEIGHT) + dH
-          ) {
-            underPushed = true;
-            break;
-          }
-        }
-      }
+    if (horizontallyOverlap(pivot, node) && top > pivot.position.y && top < nodeBottom(pivot, 0)) {
+      drop = Math.max(drop, nodeBottom(pivot, 0) + PUSH_GAP - top);
+    }
 
-      if (underPivot || underPushed) {
-        push.add(candidate.id);
-        changed = true;
+    for (const [id, dy] of drops) {
+      const mover = nodes.find(n => n.id === id);
+      if (!mover) continue;
+      if (horizontallyOverlap(mover, node) && top > mover.position.y && top < nodeBottom(mover, dy)) {
+        drop = Math.max(drop, nodeBottom(mover, dy) + PUSH_GAP - top);
       }
     }
+
+    if (drop > 0) drops.set(node.id, drop);
   }
-  return push;
+  return drops;
 };
 
 export const applyExpansion = (
@@ -134,15 +126,21 @@ export const applyExpansion = (
   const widened = shiftDownstream(nodes, edges, pivotId, dW);
   if (dH <= 0) return widened;
 
-  // grow-down: drop the nodes the taller pivot now overlaps (and their column) by the same dH,
-  // dragging each displaced node's downstream chain along so its outgoing edges stay level
-  const pushDown = collectBelowOverlap(widened, pivotId, dH);
-  const dragged = new Set(pushDown);
-  pushDown.forEach(id => collectDownstream(edges, id, dragged));
-  dragged.delete(pivotId);
+  // grow-down: drop only as far as needed to clear the taller box, dragging each displaced node's
+  // downstream chain along by the same amount so its outgoing edges stay level
+  const drops = resolvePushDown(widened, pivotId);
+  const withChildren = new Map(drops);
+  drops.forEach((dy, id) => {
+    const chain = new Set<string>();
+    collectDownstream(edges, id, chain);
+    chain.forEach(childId => {
+      if (childId !== pivotId) withChildren.set(childId, Math.max(withChildren.get(childId) ?? 0, dy));
+    });
+  });
+
   return widened.map(n =>
-    dragged.has(n.id)
-      ? { ...n, position: { x: n.position.x, y: n.position.y + dH } }
+    withChildren.has(n.id)
+      ? { ...n, position: { x: n.position.x, y: n.position.y + (withChildren.get(n.id) ?? 0) } }
       : n
   );
 };
