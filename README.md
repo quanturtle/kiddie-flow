@@ -19,8 +19,10 @@ Use a variety of nodes to accomplish a task:
 
 ![](./img/kiddie_flow_2.png)
 
-Simple yet powerful configuration:
-
 ![](./img/kiddie_flow_3.png)
 
+Simple yet powerful configuration:
+
 ![](./img/kiddie_flow_4.png)
+
+![](./img/kiddie_flow_5.png)
