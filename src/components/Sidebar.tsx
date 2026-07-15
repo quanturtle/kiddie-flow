@@ -1,6 +1,7 @@
 import { useStore, NodeType } from '../store/flowStore';
 import { X, Plus, Minus } from 'lucide-react';
 import { nodeStyles } from '../theme/nodeTheme';
+import { nodeBehaviors } from '../store/nodeBehaviors';
 
 export function Sidebar() {
   const selectedNode = useStore(state => state.selectedNode);
@@ -17,19 +18,17 @@ export function Sidebar() {
 
   const parentConnections = edges
     .filter(edge => edge.target === selectedNode)
-    .map(edge => ({
-      edge,
-      node: nodes.find(n => n.id === edge.source),
-    }))
-    .filter(conn => conn.node);
+    .flatMap(edge => {
+      const node = nodes.find(n => n.id === edge.source);
+      return node ? [{ edge, node }] : [];
+    });
 
   const childConnections = edges
     .filter(edge => edge.source === selectedNode)
-    .map(edge => ({
-      edge,
-      node: nodes.find(n => n.id === edge.target),
-    }))
-    .filter(conn => conn.node);
+    .flatMap(edge => {
+      const node = nodes.find(n => n.id === edge.target);
+      return node ? [{ edge, node }] : [];
+    });
 
   const createdAt = new Date(node.data.createdAt).toLocaleString();
   const typeStyle = nodeStyles[node.data.type];
@@ -158,7 +157,7 @@ export function Sidebar() {
           </div>
         </div>
 
-        {node.data.type !== 'result' && (
+        {nodeBehaviors[node.data.type].configurableOutputs && (
           <div className="border-2 border-black rounded-lg p-4 space-y-4 bg-gray-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between">
               <label className="font-bold text-sm uppercase">Number of Outputs</label>

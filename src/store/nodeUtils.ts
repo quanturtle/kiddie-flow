@@ -1,5 +1,6 @@
 import { Node } from 'reactflow';
 import { NodeData, HandleConfig, NodeType } from './types';
+import { nodeBehaviors } from './nodeBehaviors';
 
 // Keep track of the highest ID used so far
 let highestId = 1;
@@ -25,6 +26,10 @@ export const processNodeText = (text: string, inputValues: Record<string, string
   return processedText;
 };
 
+export const deriveNodeText = (type: NodeType, inputValues: Record<string, string>, currentText: string): string =>
+  // display nodes mirror their inputs by concatenating them; every other node keeps its own text
+  nodeBehaviors[type].isDisplay ? Object.values(inputValues).join('\n\n') : currentText;
+
 export const generateUniqueNodeId = (nodes: Node[]): string => {
   // Get all existing numeric IDs
   const existingIds = new Set(
@@ -49,8 +54,8 @@ export const generateUniqueNodeId = (nodes: Node[]): string => {
 };
 
 export const getNodeOutput = (node: Node<NodeData>): string => {
-  // a python node emits whatever its last run printed; everything else templates its text
-  if (node.data.type === 'python') {
+  // a runnable node emits whatever its last run produced; everything else templates its text
+  if (nodeBehaviors[node.data.type].isRunnable) {
     return node.data.computedOutput ?? '';
   }
   return processNodeText(node.data.text, node.data.inputValues, node.data.inputHandles);
@@ -67,16 +72,4 @@ export const toPythonFunctionName = (title: string): string => {
   return /^[0-9]/.test(safe) ? `_${safe}` : safe;
 };
 
-export const getDefaultDescription = (type: NodeType) => {
-  switch (type) {
-    case 'text': return 'Transforms text input using template syntax';
-    case 'image': return 'Processes image data';
-    case 'voice': return 'Scaffolding — audio processing not wired to execution yet';
-    case 'javascript': return 'Scaffolding — runs as a text template; no JS engine yet';
-    case 'python': return 'Runs Python code';
-    case 'result': return 'Displays final output';
-    case 'source': return 'Provides initial input data';
-    case 'preview': return 'Shows live preview of changes';
-    default: return '';
-  }
-};
+export const getDefaultDescription = (type: NodeType): string => nodeBehaviors[type].description;
