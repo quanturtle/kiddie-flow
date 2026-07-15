@@ -1,25 +1,23 @@
-import React from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
   NodeTypes,
-  OnNodeClick,
-  OnNodeDoubleClick,
+  NodeMouseHandler,
   ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { HelpCircle, Github } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
-import { TextNode } from './components/TextNode';
+import { FlowNode } from './components/FlowNode';
 import { Sidebar } from './components/Sidebar';
 import { AddNodeMenu } from './components/AddNodeMenu';
 import { useStore } from './store/flowStore';
 import { CANVAS_BG, CANVAS_DOT } from './theme/nodeTheme';
 
 const nodeTypes: NodeTypes = {
-  flowNode: TextNode,
+  flowNode: FlowNode,
 };
 
 // Default viewport that shows all demo nodes
@@ -39,14 +37,14 @@ function Flow() {
     selectedNode,
   } = useStore();
 
-  const handleNodeClick: OnNodeClick = (_, node) => {
+  const handleNodeClick: NodeMouseHandler = (_, node) => {
     // If sidebar is already open, switch context to the clicked node
     if (selectedNode !== null) {
       setSelectedNode(node.id);
     }
   };
 
-  const handleNodeDoubleClick: OnNodeDoubleClick = (_, node) => {
+  const handleNodeDoubleClick: NodeMouseHandler = (_, node) => {
     // Always open sidebar on double click
     setSelectedNode(node.id);
   };

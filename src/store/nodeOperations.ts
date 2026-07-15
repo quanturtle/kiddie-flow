@@ -1,6 +1,7 @@
 import { Node, Edge } from 'reactflow';
 import { NodeData, NodeType } from './types';
-import { createDefaultHandles, generateUniqueNodeId, getDefaultDescription, getNodeOutput, isImageValue } from './nodeUtils';
+import { createDefaultHandles, deriveNodeText, generateUniqueNodeId, getDefaultDescription, getNodeOutput, isImageValue } from './nodeUtils';
+import { nodeBehaviors } from './nodeBehaviors';
 
 export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], sourceNodeId: string): Node<NodeData>[] => {
   const updatedNodes = [...nodes];
@@ -25,9 +26,7 @@ export const updateDownstreamNodes = (nodes: Node<NodeData>[], edges: Edge[], so
       node.data.inputValues[edge.targetHandle] = getNodeOutput(sourceNode);
     });
 
-    if (node.data.type === 'result' || node.data.type === 'preview') {
-      node.data.text = Object.values(node.data.inputValues).join('\n\n');
-    }
+    node.data.text = deriveNodeText(node.data.type, node.data.inputValues, node.data.text);
 
     updatedNodes[nodeIndex] = node;
 
@@ -212,7 +211,7 @@ const visitAncestors = (
     .forEach(edge => visitAncestors(edge.source, nodes, edges, visited, order));
 
   const node = nodes.find(n => n.id === nodeId);
-  if (node && node.data.type === 'python') {
+  if (node && nodeBehaviors[node.data.type].isRunnable) {
     order.push(nodeId);
   }
 };
@@ -255,13 +254,17 @@ export const reconcileImageNodes = (nodes: Node<NodeData>[], edges: Edge[]): Nod
   return nodes.map(node => (node.data.type === 'image' ? reconcileImageNode(node, edges) : node));
 };
 
-export const createNewNode = (type: NodeType, lastNode: Node<NodeData>, updateNodeData: (id: string, text: string) => void): Node<NodeData> => {
+export const createNewNode = (type: NodeType, lastNode: Node<NodeData>): Node<NodeData> => {
   const id = generateUniqueNodeId([lastNode]);
-  
+
   const position = {
     x: lastNode.position.x + 50,
     y: lastNode.position.y + 50,
   };
+
+  const behavior = nodeBehaviors[type];
+  // display and image nodes start with no seed text — they only ever show what flows in
+  const startsEmpty = behavior.isDisplay || type === 'image';
 
   return {
     id,
@@ -271,17 +274,16 @@ export const createNewNode = (type: NodeType, lastNode: Node<NodeData>, updateNo
       title: `${type.charAt(0).toUpperCase() + type.slice(1)} ${id}`,
       description: getDefaultDescription(type),
       showDescription: true,
-      text: type === 'result' || type === 'preview' || type === 'image' ? '' : `${type} ${id}`,
+      text: startsEmpty ? '' : `${type} ${id}`,
       createdAt: new Date().toISOString(),
-      onChange: (text: string) => updateNodeData(id, text),
       type,
       // a fresh image node starts empty: it can receive an image (input) or load one; the
       // output handle only appears once it holds its own image (see reconcileImageNodes).
-      inputs: type === 'source' ? 0 : 1,
-      outputs: type === 'result' || type === 'image' ? 0 : 1,
+      inputs: behavior.defaultInputs,
+      outputs: behavior.defaultOutputs,
       inputValues: {},
-      inputHandles: createDefaultHandles(type === 'source' ? 0 : 1, 'input'),
-      outputHandles: createDefaultHandles(type === 'result' || type === 'image' ? 0 : 1, 'output'),
+      inputHandles: createDefaultHandles(behavior.defaultInputs, 'input'),
+      outputHandles: createDefaultHandles(behavior.defaultOutputs, 'output'),
       showInputs: false,
       showOutput: false,
       isCollapsed: false,

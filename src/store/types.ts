@@ -19,7 +19,6 @@ export type NodeData = {
   showDescription: boolean;
   text: string;
   createdAt: string;
-  onChange: (text: string) => void;
   type: NodeType;
   inputs: number;
   outputs: number;

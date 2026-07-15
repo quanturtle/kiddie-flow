@@ -9,7 +9,8 @@ import {
 } from 'reactflow';
 import { create } from 'zustand';
 import { NodeData, NodeType, RFState } from './types';
-import { createDefaultHandles, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
+import { nodeBehaviors } from './nodeBehaviors';
+import { createDefaultHandles, deriveNodeText, getNodeOutput, getPythonArgs, toPythonFunctionName } from './nodeUtils';
 import { updateDownstreamNodes, createNewNode, collectPythonRunOrder, buildExecutableCode, applyExpansion, pushOverlaps, collectDownstream, reconcileImageNodes } from './nodeOperations';
 import { initialNodes, initialEdges } from './initialData';
 import { runPython } from '../runtime/pythonRuntime';
@@ -94,9 +95,7 @@ export const useStore = create<RFState>((set, get) => {
             data: {
               ...node.data,
               inputValues: newInputValues,
-              text: node.data.type === 'result' || node.data.type === 'preview'
-                ? Object.values(newInputValues).join('\n\n')
-                : node.data.text,
+              text: deriveNodeText(node.data.type, newInputValues, node.data.text),
             },
           };
         }
@@ -114,9 +113,10 @@ export const useStore = create<RFState>((set, get) => {
       const targetNode = get().nodes.find(node => node.id === connection.target);
       
       if (sourceNode && targetNode && connection.targetHandle) {
-        const existingConnection = get().edges.find(edge => 
-          edge.target === connection.target && 
-          edge.targetHandle === connection.targetHandle
+        const targetHandle = connection.targetHandle;
+        const existingConnection = get().edges.find(edge =>
+          edge.target === connection.target &&
+          edge.targetHandle === targetHandle
         );
 
         if (existingConnection) return;
@@ -133,11 +133,9 @@ export const useStore = create<RFState>((set, get) => {
                   ...node.data,
                   inputValues: {
                     ...node.data.inputValues,
-                    [connection.targetHandle]: processedText,
+                    [targetHandle]: processedText,
                   },
-                  text: node.data.type === 'result' || node.data.type === 'preview'
-                    ? Object.values(node.data.inputValues).join('\n\n')
-                    : node.data.text,
+                  text: deriveNodeText(node.data.type, node.data.inputValues, node.data.text),
                 },
               };
             }
@@ -211,9 +209,7 @@ export const useStore = create<RFState>((set, get) => {
                 ...config,
                 inputHandles: newInputHandles,
                 inputValues: newInputValues,
-                text: node.data.type === 'result' || node.data.type === 'preview'
-                  ? Object.values(newInputValues).join('\n\n')
-                  : node.data.text,
+                text: deriveNodeText(node.data.type, newInputValues, node.data.text),
               },
             };
           }
@@ -305,7 +301,7 @@ export const useStore = create<RFState>((set, get) => {
 
     addNode: (type: NodeType) => {
       const lastNode = get().nodes[get().nodes.length - 1];
-      const newNode = createNewNode(type, lastNode, get().updateNodeData);
+      const newNode = createNewNode(type, lastNode);
       
       // Add the node first
       set(state => ({ nodes: [...state.nodes, newNode] }));
@@ -335,9 +331,7 @@ export const useStore = create<RFState>((set, get) => {
             data: {
               ...node.data,
               inputValues: newInputValues,
-              text: node.data.type === 'result' || node.data.type === 'preview'
-                ? Object.values(newInputValues).join('\n\n')
-                : node.data.text,
+              text: deriveNodeText(node.data.type, newInputValues, node.data.text),
             },
           };
         }
@@ -431,9 +425,7 @@ export const useStore = create<RFState>((set, get) => {
               inputs: newInputCount,
               inputHandles: newInputHandles,
               inputValues: newInputValues,
-              text: node.data.type === 'result' || node.data.type === 'preview'
-                ? Object.values(newInputValues).join('\n\n')
-                : node.data.text,
+              text: deriveNodeText(node.data.type, newInputValues, node.data.text),
             },
           };
         }
@@ -450,7 +442,7 @@ export const useStore = create<RFState>((set, get) => {
 
     runPythonNode: async (nodeId: string) => {
       const target = get().nodes.find(n => n.id === nodeId);
-      if (!target || target.data.type !== 'python') return;
+      if (!target || !nodeBehaviors[target.data.type].isRunnable) return;
 
       // run this node's python ancestors first, then the node — never anything downstream
       const runOrder = collectPythonRunOrder(get().nodes, get().edges, nodeId);
@@ -492,16 +484,7 @@ export const useStore = create<RFState>((set, get) => {
     },
   };
 
-  // Update the onChange handlers with the actual store reference
-  const nodesWithHandlers = store.nodes.map(node => ({
-    ...node,
-    data: {
-      ...node.data,
-      onChange: (text: string) => store.updateNodeData(node.id, text),
-    },
-  }));
-
-  // Trigger initial data flow after setup: source and image nodes seed their downstream
+  // seed initial data flow after setup: source and image nodes push their text downstream
   setTimeout(() => {
     const rootNodes = store.nodes.filter(
       node => node.data.type === 'source' || node.data.type === 'image'
@@ -511,9 +494,5 @@ export const useStore = create<RFState>((set, get) => {
     });
   }, 0);
 
-  // Return the store with the updated nodes
-  return {
-    ...store,
-    nodes: nodesWithHandlers,
-  };
+  return store;
 });
